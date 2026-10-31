@@ -57,7 +57,7 @@ T = {
  "ar": dict(
   lang="ar", dir="rtl", sitename="نطاق شقراء الصحي", sub="تجمع الرياض الصحي الثالث", logoalt="شعار الصحة القابضة – Health Holding",
   switch_label="English", switch_title="Switch to English", switch_lang="en",
-  nav=["الرئيسية", "طلب جديد", "الأسئلة", "الروابط", "التواصل"], navaria="التنقل الرئيسي", skip="تخطَّ إلى المحتوى",
+  nav=["الرئيسية", "مسار الموظف", "طلب جديد", "الأسئلة", "الروابط", "التواصل"], navaria="التنقل الرئيسي", skip="تخطَّ إلى المحتوى",
   fcare="قسم العناية بالموظفين", fext="التحويلة 671",
   fnote="حملة توعية داخلية لموظفي نطاق شقراء الصحي. هذا الموقع ليس موقعًا حكوميًا رسميًا؛ المرجع الرسمي هو الصحة القابضة والجهات المختصة.",
   # ticket form
@@ -97,7 +97,7 @@ T = {
  "en": dict(
   lang="en", dir="ltr", sitename="Shaqra Health Cluster", sub="Riyadh Third Health Cluster", logoalt="Health Holding logo",
   switch_label="العربية", switch_title="التبديل إلى العربية", switch_lang="ar",
-  nav=["Home", "New request", "FAQ", "Links", "Contact"], navaria="Main navigation", skip="Skip to content",
+  nav=["Home", "My journey", "New request", "FAQ", "Links", "Contact"], navaria="Main navigation", skip="Skip to content",
   fcare="Employee Care Department", fext="Ext. 671",
   fnote="Internal awareness campaign for Shaqra Health Cluster staff. This is not an official government website; the official references are Health Holding and the responsible authorities.",
   tf_title="New request", tf_h1="I have a question or request", tf_p="Three short steps. You will get a ticket number to track your request.",

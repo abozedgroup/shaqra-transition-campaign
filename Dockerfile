@@ -12,7 +12,7 @@ RUN pip install --no-cache-dir -r /srv/requirements.txt
 # application code
 COPY app/ /srv/app/
 # public static pages only (allowlisted by the app as well)
-COPY index.html faq.html contact.html links.html /srv/site/
+COPY index.html faq.html contact.html links.html journey.html /srv/site/
 COPY en/ /srv/site/en/
 COPY assets/ /srv/site/assets/
 COPY infographics/ /srv/site/infographics/

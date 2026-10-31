@@ -56,8 +56,8 @@ EN = {
 EXTRA = [  # (cat, org, aud, ar_title, ar_desc, ar_url, en_title, en_desc, en_url)
  ("ins","gosi","differs","التأمينات: من يشمله النظام ومتى يبدأ الاشتراك","صفحة التسجيل الرسمية: فرع المعاشات للسعوديين فقط، وفرع الأخطار المهنية على جميع العاملين دون تمييز في الجنسية.",
   "https://www.gosi.gov.sa/GOSIOnline/Registration","GOSI: who is covered and how registration works","Official registration page: the pension (annuities) branch covers Saudis only; the occupational-hazards branch covers all workers regardless of nationality.","https://www.gosi.gov.sa/GOSIOnline/Registration?locale=en_US"),
- ("ins","gosi","differs","التأمينات: أسئلة أصحاب العمل (التغطية حسب الجنسية)","أسئلة شائعة رسمية؛ تذكر أن تغطية غير السعودي في فرع الأخطار المهنية فقط، وأن اشتراكه 2% يتحملها صاحب العمل.",
-  "https://www.gosi.gov.sa/GOSIOnline/FAQ_Employer","GOSI: employer FAQ (coverage by nationality)","Official FAQ: a non-Saudi contributor is covered under the occupational-hazards branch only; the 2% contribution is paid by the employer.","https://www.gosi.gov.sa/GOSIOnline/FAQ_Employer?locale=en_US"),
+ ("ins","gosi","differs","التأمينات: أسئلة أصحاب العمل","أسئلة شائعة رسمية؛ تذكر أن تغطية غير السعودي في فرع الأخطار المهنية فقط، وأن اشتراكه 2% يتحملها صاحب العمل.",
+  "https://www.gosi.gov.sa/GOSIOnline/FAQ_Employer","GOSI: employer FAQ","Official FAQ: a non-Saudi contributor is covered under the occupational-hazards branch only; the 2% contribution is paid by the employer.","https://www.gosi.gov.sa/GOSIOnline/FAQ_Employer?locale=en_US"),
 ]
 
 def load():

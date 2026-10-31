@@ -292,7 +292,7 @@ def inject_i18n():
     if p.startswith("/admin") or p.startswith("/en/admin"):
         other = None
     return dict(t=T[lang], lang=lang, dir=T[lang]["dir"], pre=pre, switch_url=other,
-                u=dict(home=pre + "/", faq=pre + "/faq.html", links=pre + "/links.html", contact=pre + "/contact.html",
+                u=dict(home=pre + "/", journey=pre + "/journey.html", faq=pre + "/faq.html", links=pre + "/links.html", contact=pre + "/contact.html",
                        ticket=pre + "/ticket", status=pre + "/status", done=pre + "/ticket/done"))
 
 
@@ -625,8 +625,8 @@ def admin_export():
 
 
 # ---------------------------------------------------------------- static site
-STATIC_PAGES = {"index.html", "faq.html", "contact.html", "links.html",
-                "en/index.html", "en/faq.html", "en/contact.html", "en/links.html"}
+STATIC_PAGES = {"index.html", "faq.html", "contact.html", "links.html", "journey.html",
+                "en/index.html", "en/faq.html", "en/contact.html", "en/links.html", "en/journey.html"}
 STATIC_DIRS = {"assets", "infographics", "kb"}
 
 

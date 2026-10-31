@@ -16,6 +16,7 @@ IC = {
  "chat": '<path d="M4 5h16v11H9l-5 4z"/>',
  "track": '<circle cx="11" cy="11" r="6"/><path d="M16 16l5 5"/>',
  "faq": '<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 1-1 1.7M12 17h.01"/>',
+  "path": '<circle cx="5" cy="18" r="2"/><circle cx="19" cy="6" r="2"/><path d="M7 18h6a4 4 0 0 0 0-8h-2a4 4 0 0 1 0-8h6" transform="translate(0 2)"/>',
  "link": '<path d="M10 14a4 4 0 0 0 5.6 0l3-3a4 4 0 0 0-5.6-5.6l-1 1M14 10a4 4 0 0 0-5.6 0l-3 3a4 4 0 0 0 5.6 5.6l1-1"/>',
 }
 def icon(n):
@@ -26,7 +27,7 @@ S = {
  "ar": dict(
   lang="ar", dir="rtl", sitename="نطاق شقراء الصحي", sub="تجمع الرياض الصحي الثالث", logoalt="شعار الصحة القابضة – Health Holding",
   switch_label="English", switch_title="Switch to English", switch_lang="en",
-  nav=["الرئيسية", "طلب جديد", "الأسئلة", "الروابط", "التواصل"], navaria="التنقل الرئيسي", skip="تخطَّ إلى المحتوى",
+  nav=["الرئيسية", "مسار الموظف", "طلب جديد", "الأسئلة", "الروابط", "التواصل"], navaria="التنقل الرئيسي", skip="تخطَّ إلى المحتوى",
   fcare="قسم العناية بالموظفين", fext="التحويلة 671", ext="تحويلة 671",
   fnote="حملة توعية داخلية لموظفي نطاق شقراء الصحي. هذا الموقع ليس موقعًا حكوميًا رسميًا؛ المرجع الرسمي هو الصحة القابضة والجهات المختصة.",
   verified="تاريخ التحقق من الروابط: ",
@@ -35,7 +36,7 @@ S = {
  "en": dict(
   lang="en", dir="ltr", sitename="Shaqra Health Cluster", sub="Riyadh Third Health Cluster", logoalt="Health Holding logo",
   switch_label="العربية", switch_title="التبديل إلى العربية", switch_lang="ar",
-  nav=["Home", "New request", "FAQ", "Links", "Contact"], navaria="Main navigation", skip="Skip to content",
+  nav=["Home", "My journey", "New request", "FAQ", "Links", "Contact"], navaria="Main navigation", skip="Skip to content",
   fcare="Employee Care Department", fext="Ext. 671", ext="Ext. 671",
   fnote="Internal awareness campaign for Shaqra Health Cluster staff. This is not an official government website; the official references are Health Holding and the responsible authorities.",
   verified="Links last verified: ",
@@ -51,7 +52,7 @@ def page(lang, name, title, desc, body, scripts=(), cur=None, extra_head=""):
         sw = "en/" if name == "index" else f"en/{name}.html"
     else:
         sw = "../" if name == "index" else f"../{name}.html"
-    navs = [("index", "./"), ("ticket", APP + t["ticket_path"]), ("faq", "faq.html"), ("links", "links.html"), ("contact", "contact.html")]
+    navs = [("index", "./"), ("journey", "journey.html"), ("ticket", APP + t["ticket_path"]), ("faq", "faq.html"), ("links", "links.html"), ("contact", "contact.html")]
     nav_html = "".join(
         f'<a href="{href}"{" class=cur aria-current=page" if key == cur else ""}>{e(lbl)}</a>'
         for (key, href), lbl in zip(navs, t["nav"]))
@@ -111,10 +112,11 @@ H = {
  "ar": dict(
   title="دليل الموظف: الانتقال إلى الصحة القابضة",
   desc="دليل موظفي نطاق شقراء الصحي: ماذا يحدث، ما المطلوب منك، وكيف تتواصل مع قسم العناية بالموظفين.",
-  tag="للسعوديين وغير السعوديين",
+  tag="دليل الموظف",
   h1="الانتقال إلى الصحة القابضة: كل ما يهمّك هنا",
   sub="موظفو مستشفيات شقراء وثادق ومرات ومراكزها يستعدون للانتقال إلى شركة الصحة القابضة.",
-  btns=[("primary", "chat", ticket("ar"), "عندي سؤال أو طلب", "افتح تذكرة لقسم العناية بالموظفين"),
+  btns=[("primary", "path", "journey.html", "مسار الموظف", "حقوقك وما عليك، مرحلة بمرحلة"),
+        ("", "chat", ticket("ar"), "عندي سؤال أو طلب", "افتح تذكرة لقسم العناية بالموظفين"),
         ("", "track", APP + "/status", "متابعة طلبي", "برقم التذكرة وبريدك الوزاري"),
         ("", "faq", "faq.html", "الأسئلة الشائعة", "إجابات رسمية جاهزة"),
         ("", "link", "links.html", "الروابط الرسمية", "قوى، التأمينات، الموارد البشرية وغيرها")],
@@ -123,9 +125,6 @@ H = {
          ("راقب بريدك الوزاري", "يصل طلب الانتقال لمن اجتاز معايير المفاضلة وحالته «نشط» في «موارد»."),
          ("راجع عقدك في «قوى»", "ستصلك رسالة من «قوى»، ثم: قوى أفراد ← الخدمات ← العقود الوظيفية.")],
   src_note="الخطوات من الأسئلة الشائعة الرسمية للصحة القابضة. التفاصيل الكاملة في صفحة الأسئلة.",
-  who_h="سعودي أم غير سعودي؟",
-  who_p="بعض المعلومات تختلف حسب الجنسية (مثل التأمينات الاجتماعية). لم نجد في المصادر الرسمية صفحة مستقلة لغير السعوديين عن الانتقال؛ فإن لم تجد ما يخصّك اسأل قسم العناية بالموظفين.",
-  who_btn="ما الذي يختلف؟",
   contact_h="للتواصل المباشر",
   contact_who="قسم العناية بالموظفين",
   src="المصدر: الأسئلة الشائعة الرسمية للصحة القابضة (health.sa).",
@@ -133,10 +132,11 @@ H = {
  "en": dict(
   title="Employee guide: moving to Health Holding",
   desc="Guide for Shaqra Health Cluster staff: what is happening, what you need to do, and how to reach the Employee Care Department.",
-  tag="For Saudi and non-Saudi staff",
+  tag="Employee guide",
   h1="Moving to Health Holding: everything you need, here",
   sub="Staff of Shaqra, Thadiq and Marat hospitals and their health centers are getting ready to move to Health Holding Company.",
-  btns=[("primary", "chat", ticket("en"), "I have a question or request", "Open a ticket to the Employee Care team"),
+  btns=[("primary", "path", "journey.html", "My journey", "Your rights and what to do, stage by stage"),
+        ("", "chat", ticket("en"), "I have a question or request", "Open a ticket to the Employee Care team"),
         ("", "track", APP + "/en/status", "Track my request", "Use your ticket number and ministry email"),
         ("", "faq", "faq.html", "Frequently asked questions", "Ready answers from official sources"),
         ("", "link", "links.html", "Official links", "Qiwa, GOSI, HRSD and more")],
@@ -145,9 +145,6 @@ H = {
          ("Watch your ministry email", "The transfer request goes to staff who passed the selection criteria and whose status is “Active” in Mawared."),
          ("Review your contract in Qiwa", "You will get a message from Qiwa. Then go to: Qiwa Individuals → Services → Employment contracts.")],
   src_note="These steps come from the official Health Holding FAQ. See the FAQ page for details.",
-  who_h="Saudi or non-Saudi?",
-  who_p="Some information differs by nationality (for example, social insurance). We did not find a separate official page about the transition for non-Saudis. If you cannot find what applies to you, ask the Employee Care Department.",
-  who_btn="What is different?",
   contact_h="Contact us directly",
   contact_who="Employee Care Department",
   src="Source: official Health Holding FAQ (health.sa). The FAQ is published in Arabic.",
@@ -173,9 +170,6 @@ def home(lang):
   <ol class="steps row">{steps}</ol>
   <p class="srcline">{e(h["src_note"])}</p>
 </div></section>
-<section class="s alt"><div class="wrap">
-  <div class="note" style="margin-top:0"><b>{e(h["who_h"])}</b> {e(h["who_p"])} <a href="links.html#who">{e(h["who_btn"])}</a></div>
-</div></section>
 <section class="s"><div class="wrap">
   <div class="cstrip">
     <div><b>{e(h["contact_h"])}</b><br>{e(h["contact_who"])}</div>
@@ -188,17 +182,15 @@ def home(lang):
 # ---------------------------------------------------------------- FAQ
 FQ = {
  "ar": dict(title="الأسئلة الشائعة", desc="إجابات من المصادر الرسمية عن الانتقال إلى الصحة القابضة.", h1="الأسئلة الشائعة", p="إجابات من المصادر الرسمية فقط. ابحث بكلمة، أو اختر موضوعًا.",
-  search="ابحث في الأسئلة…", searchlbl="ابحث", cats_all="الكل", aud_lbl="أنا:", aud=["الكل", "سعودي", "غير سعودي"],
-  banner="الأسئلة الرسمية لا تفرّق بين السعودي وغير السعودي إلا حيث وُضعت علامة. علامة «سعوديون» على بنود المعاشات التقاعدية. إن كنت غير سعودي وسؤالك يتعلق بالانتقال، اسأل قسم العناية بالموظفين.",
+  search="ابحث في الأسئلة…", searchlbl="ابحث", cats_all="الكل", journey_p="تريد معرفة حقوقك وما عليك بحسب وضعك؟", journey_a="افتح مسار الموظف",
+  banner="",
   count="{n} سؤال", none_h="لم نجد إجابة لسؤالك", none_p="لا تخمّن. أرسل سؤالك لقسم العناية بالموظفين.", ask="اسأل قسم العناية بالموظفين", source="المصدر:", askq="لم تجد سؤالك؟",
-  nonsaudi_note="لا توجد في الأسئلة الرسمية إجابات خاصة بغير السعوديين على هذه الأسئلة. اسأل قسم العناية بالموظفين.",
-  aud_saudi="سعوديون (المعاشات)", unofficial=""),
+  unofficial=""),
  "en": dict(title="Frequently asked questions", desc="Answers from official sources about the move to Health Holding (English translation of the Arabic official FAQ).", h1="Frequently asked questions", p="Answers from official sources only. Search by a word, or pick a topic.",
-  search="Search the questions…", searchlbl="Search", cats_all="All", aud_lbl="I am:", aud=["All", "Saudi", "Non-Saudi"],
-  banner="Unofficial translation. The official FAQ is published in Arabic only; this English version was translated from it and has not been reviewed by Health Holding. If in doubt, the Arabic text and the Employee Care Department decide. The official FAQ does not separate Saudi and non-Saudi staff except where marked. Items marked “Saudis” concern pension rules. Non-Saudi and your question is about the transition? Ask the Employee Care Department.",
+  search="Search the questions…", searchlbl="Search", cats_all="All", journey_p="Want to know your rights and what you must do, based on your situation?", journey_a="Open My journey",
+  banner="Unofficial translation. The official FAQ is published in Arabic only; this English version was translated from it and has not been reviewed by Health Holding. If in doubt, the Arabic text and the Employee Care Department decide.",
   count="{n} questions", none_h="We did not find an answer to your question", none_p="Please do not guess. Send your question to the Employee Care Department.", ask="Ask the Employee Care Department", source="Source:", askq="Can't find your question?",
-  nonsaudi_note="The official FAQ has no separate answers for non-Saudis on these questions. Please ask the Employee Care Department.",
-  aud_saudi="Saudis (pension)", unofficial=""),
+  unofficial=""),
 }
 CAT_EN = {"about": "Transition & Health Holding", "salary": "Salaries & allowances", "contract": "Contract & job title",
           "qiwa": "Mawared & Qiwa platforms", "decline": "If you do not want to transfer", "retire": "Retirement & service merge",
@@ -220,28 +212,23 @@ def faq(lang):
         for it in c["items"]:
             total += 1
             q, a = (it["q"], it["a"]) if lang == "ar" else (en[str(it["id"])]["q"], en[str(it["id"])]["a"])
-            aud = "saudi" if str(it["id"]).startswith("GOSI") else "all"
-            badge = f'<span class="aud saudi">{e(f["aud_saudi"])}</span> ' if aud == "saudi" else ""
             host = re.sub(r"^https?://(www\.)?", "", it["src"]).split("/")[0]
             srcname = it["srcname"] if lang == "ar" else SRC_EN.get(host, host)
             paras = "".join(f"<p>{e(p)}</p>" for p in a.split("\n") if p.strip())
             items_html.append(
-                f'<details class="fq" data-cat="{c["key"]}" data-aud="{aud}"><summary><span class="qt">{badge}<span class="qtext">{e(q)}</span></span></summary>'
+                f'<details class="fq" id="q{it["id"]}" data-cat="{c["key"]}"><summary><span class="qt"><span class="qtext">{e(q)}</span></span></summary>'
                 f'<div class="body">{paras}<p class="src">{e(f["source"])} <a href="{e(it["src"])}" rel="noopener" target="_blank">{e(srcname)}</a></p></div></details>')
-    audchips = "".join(
-        f'<button type="button" class="chip" data-aud="{k}" aria-pressed="{"true" if k=="all" else "false"}">{e(lbl)}</button>'
-        for k, lbl in zip(["all", "saudi", "nonsaudi"], f["aud"]))
     askbase = ticket(lang, "?type=inquiry&q=")
+    banner = f'<div class="note warnbox" style="margin-top:0;margin-bottom:16px">{e(f["banner"])}</div>' if f["banner"] else ""
     body = f'''<section class="page-head"><div class="wrap"><h1>{e(f["h1"])}</h1><p>{e(f["p"])}</p></div></section>
 <section class="s"><div class="wrap">
-  <div class="note{" warnbox" if lang=="en" else ""}" style="margin-top:0;margin-bottom:16px">{e(f["banner"])}</div>
+  {banner}
+  <p class="jhint"><a href="journey.html">{e(f["journey_a"])}</a> · {e(f["journey_p"])}</p>
   <div class="toolbar">
     <div class="searchbar"><input type="search" id="q" placeholder="{e(f["search"])}" aria-label="{e(f["searchlbl"])}" autocomplete="off" enterkeyhint="search"></div>
-    <div class="fgroup" role="group" aria-label="{e(f["aud_lbl"])}"><span class="lbl">{e(f["aud_lbl"])}</span>{audchips}</div>
     <div class="fgroup" id="cats" role="group" aria-label="{e(f["cats_all"])}">{"".join(chips)}</div>
   </div>
   <p class="count" id="cnt" aria-live="polite" data-tpl="{e(f["count"])}">{e(f["count"].format(n=total))}</p>
-  <div id="nsnote" class="note warnbox" hidden>{e(f["nonsaudi_note"])}</div>
   <div id="list">{"".join(items_html)}</div>
   <div class="empty" id="empty"><h2 style="margin-bottom:6px">{e(f["none_h"])}</h2><p>{e(f["none_p"])}</p>
     <a class="btn solid" id="ask-empty" href="{askbase}" data-base="{askbase}">{e(f["ask"])}</a></div>
@@ -252,66 +239,19 @@ def faq(lang):
 # ---------------------------------------------------------------- LINKS
 LK = {
  "ar": dict(title="الروابط الرسمية", desc="الروابط الرسمية المهمة للموظف مرتبة بالموضوع مع بحث وفلاتر.", h1="الروابط الرسمية", p="كل الروابط تفتح مواقع الجهات الرسمية. ابحث، أو افتح الموضوع الذي تريده.",
-  search="ابحث في الروابط…", searchlbl="ابحث", aud_lbl="أنا:", aud=["الكل", "سعودي", "غير سعودي"], org_lbl="الجهة:", org_all="كل الجهات",
+  search="ابحث في الروابط…", searchlbl="ابحث", org_lbl="الجهة:", org_all="كل الجهات",
   eng_lbl="الصفحة بالإنجليزية فقط", expand="فتح الكل", collapse="طي الكل", count="{n} رابط", none="لا توجد روابط مطابقة. جرّب كلمة أخرى أو أزل الفلاتر.", reset="إعادة ضبط الفلاتر",
-  audname={"all": "عام", "saudi": "سعوديون", "differs": "يختلف: سعودي / غير سعودي"}, legend="«عام» = الصفحة الرسمية لا تحدد جنسية. «يختلف» = الصفحة تشرح أحكامًا مختلفة للسعودي وغير السعودي.",
   en_page="النسخة الإنجليزية", en_only="الصفحة بالإنجليزية", ar_only="بالعربية فقط", opens="يفتح موقعًا رسميًا خارجيًا",
-  who_h="سعودي أم غير سعودي؟ ما الذي يختلف", who_src="المصدر:", care="اسأل قسم العناية بالموظفين",
-  ns_note="غير سعودي؟ نعرض لك الروابط العامة وما يخصك. إن لم تجد صفحة رسمية تخص الانتقال لغير السعوديين فاسأل قسم العناية بالموظفين.",
   ins_note="التأمين الطبي بعد الانتقال: لم نجد صفحة رسمية تشرحه. للاستفسار اسأل قسم العناية بالموظفين.",
-  cmp_to="لا مصدر رسمي هنا", sa="السعودي:", ns="غير السعودي:",
  ),
  "en": dict(title="Official links", desc="Official links that matter to staff, grouped by topic, with search and filters.", h1="Official links", p="Every link opens an official website. Search, or open the topic you need.",
-  search="Search the links…", searchlbl="Search", aud_lbl="I am:", aud=["All", "Saudi", "Non-Saudi"], org_lbl="Source:", org_all="All sources",
+  search="Search the links…", searchlbl="Search", org_lbl="Source:", org_all="All sources",
   eng_lbl="Page has an English version", expand="Open all", collapse="Close all", count="{n} links", none="No links match. Try another word or clear the filters.", reset="Clear filters",
-  audname={"all": "General", "saudi": "Saudis", "differs": "Differs: Saudi / Non-Saudi"}, legend="“General” = the official page does not name a nationality. “Differs” = the page explains different rules for Saudis and non-Saudis.",
   en_page="English version", en_only="English page", ar_only="Arabic only", opens="Opens an official external website",
-  who_h="Saudi or non-Saudi? What is different", who_src="Source:", care="Ask the Employee Care Department",
-  ns_note="Non-Saudi? We show the general links and the ones that apply to you. If you cannot find an official page about the transition for non-Saudis, please ask the Employee Care Department.",
   ins_note="Medical insurance after the transfer: we did not find an official page explaining it. Please ask the Employee Care Department.",
-  cmp_to="", sa="Saudi:", ns="Non-Saudi:",
  ),
 }
 ORG_ORDER = ["hhc", "r3", "moh", "hrsd", "gosi", "qiwa", "gov"]
-
-CMP = {  # rows: (title ar/en, saudi ar/en, nonsaudi ar/en, src label ar/en, src url)
- "ar": [
-  ("التأمينات الاجتماعية (GOSI)",
-   "التغطية: المعاشات (التقاعد) والأخطار المهنية.",
-   "التغطية: الأخطار المهنية فقط. اشتراك 2% يتحملها صاحب العمل (لا خصم من راتبك).",
-   "GOSI – التسجيل", "https://www.gosi.gov.sa/GOSIOnline/Registration", "GOSI – أسئلة أصحاب العمل", "https://www.gosi.gov.sa/GOSIOnline/FAQ_Employer"),
-  ("نظام العمل وعقد العمل",
-   "تنطبق أحكام نظام العمل على علاقة العمل وفق النص الرسمي.",
-   "تنطبق أحكام نظام العمل، وبعض مواده تذكر غير السعودي صراحة (مثل الإشارة إلى المادة 37). راجع النص الرسمي.",
-   "وزارة الموارد البشرية – علاقات العمل", "https://www.hrsd.gov.sa/%D8%B9%D9%84%D8%A7%D9%82%D8%A7%D8%AA-%D8%A7%D9%84%D8%B9%D9%85%D9%84", "", ""),
-  ("مكافأة نهاية الخدمة",
-   "تنطبق الصفحات الرسمية على العامل دون ذكر جنسية.",
-   "الصفحات الرسمية لا تذكر جنسية؛ إن كان وضعك مختلفًا اسأل القسم.",
-   "وزارة الموارد البشرية – نهاية الخدمة", "https://www.hrsd.gov.sa/en/media-center/media/leendofservice", "", ""),
-  ("الانتقال إلى الصحة القابضة",
-   "الأسئلة الشائعة الرسمية تخاطب الموظفين دون تمييز بالجنسية.",
-   "لا توجد صفحة رسمية مستقلة لغير السعوديين. اسأل قسم العناية بالموظفين.",
-   "الصحة القابضة – الأسئلة الشائعة", "https://www.health.sa/ar/faqs", "", ""),
- ],
- "en": [
-  ("Social insurance (GOSI)",
-   "Covered for: pension (annuities) and occupational hazards.",
-   "Covered for: occupational hazards only. The 2% contribution is paid by the employer (no deduction from your pay).",
-   "GOSI – Registration", "https://www.gosi.gov.sa/GOSIOnline/Registration?locale=en_US", "GOSI – Employer FAQ", "https://www.gosi.gov.sa/GOSIOnline/FAQ_Employer?locale=en_US"),
-  ("Labor Law and employment contract",
-   "Labor Law provisions apply to the employment relationship as written in the official text.",
-   "Labor Law provisions apply. Some articles name non-Saudis directly (for example a reference to Article 37). Read the official text.",
-   "HRSD – Labor relations", "https://www.hrsd.gov.sa/en/%D8%B9%D9%84%D8%A7%D9%82%D8%A7%D8%AA-%D8%A7%D9%84%D8%B9%D9%85%D9%84", "", ""),
-  ("End-of-service benefit",
-   "The official pages apply to “the worker” and do not name a nationality.",
-   "The official pages do not name a nationality. If your case is different, ask the Care team.",
-   "HRSD – End of service", "https://www.hrsd.gov.sa/en/media-center/media/leendofservice", "", ""),
-  ("Move to Health Holding",
-   "The official FAQ speaks to employees without separating by nationality.",
-   "There is no separate official page for non-Saudis. Ask the Employee Care Department.",
-   "Health Holding – FAQ (Arabic)", "https://www.health.sa/ar/faqs", "", ""),
- ],
-}
 
 def links(lang):
     L = LK[lang]; t = S[lang]
@@ -320,9 +260,6 @@ def links(lang):
     orgs_used = [o for o in ORG_ORDER if any(x["org"] == o for x in data)]
     oidx = 0 if lang == "ar" else 1
     org_opts = f'<option value="">{e(L["org_all"])}</option>' + "".join(f'<option value="{o}">{e(links_data.ORGS[o][oidx])}</option>' for o in orgs_used)
-    audchips = "".join(
-        f'<button type="button" class="chip" data-aud="{k}" aria-pressed="{"true" if k=="all" else "false"}">{e(lbl)}</button>'
-        for k, lbl in zip(["all", "saudi", "nonsaudi"], L["aud"]))
     sections = []
     for key, car, cen, sar, sen in cats:
         rows = [x for x in data if x["cat"] == key]
@@ -340,39 +277,27 @@ def links(lang):
             has_en = "1" if x["en_url"] else "0"
             org = links_data.ORGS[x["org"]][oidx]
             rh.append(
-                f'<div class="lrow" data-aud="{x["aud"]}" data-org="{x["org"]}" data-en="{has_en}">'
+                f'<div class="lrow" data-org="{x["org"]}" data-en="{has_en}">'
                 f'<a class="t" href="{e(main)}" rel="noopener" target="_blank">{e(ttl)}</a>'
                 f'<p>{e(desc)}</p>'
-                f'<div class="meta"><span class="aud {x["aud"]}">{e(L["audname"][x["aud"]])}</span>{lang_badge}<span>{e(org)}</span>{alt}</div></div>')
+                f'<div class="meta">{lang_badge}<span>{e(org)}</span>{alt}</div></div>')
         extra = f'<div class="note-card">{e(L["ins_note"])} <a href="mailto:{MAIL}" class="ltr">{MAIL}</a></div>' if key == "ins" else ""
         sections.append(
             f'<details class="lcat" data-cat="{key}"><summary><span>{e(car if lang=="ar" else cen)}<span class="cat-count">{len(rows)}</span></span></summary>'
             f'<div class="body"><p class="cat-sub">{e(sar if lang=="ar" else sen)}</p>{"".join(rh)}{extra}</div></details>')
-    cmp_rows = []
-    for tt, sa, ns, l1, u1, l2, u2 in CMP[lang]:
-        srcs = f'<a href="{u1}" rel="noopener" target="_blank">{e(l1)}</a>' + (f' · <a href="{u2}" rel="noopener" target="_blank">{e(l2)}</a>' if u2 else "")
-        cmp_rows.append(f'<div class="row"><h3>{e(tt)}</h3><dl><dt>{e(L["sa"])}</dt><dd>{e(sa)}</dd><dt>{e(L["ns"])}</dt><dd>{e(ns)}</dd></dl><p class="src" style="margin:6px 0 0">{e(L["who_src"])} {srcs}</p></div>')
     askm = f'mailto:{MAIL}'
     body = f'''<section class="page-head"><div class="wrap"><h1>{e(L["h1"])}</h1><p>{e(L["p"])}</p></div></section>
 <section class="s"><div class="wrap">
   <div class="toolbar">
     <div class="searchbar"><input type="search" id="q" placeholder="{e(L["search"])}" aria-label="{e(L["searchlbl"])}" autocomplete="off" enterkeyhint="search"></div>
-    <div class="fgroup" role="group" aria-label="{e(L["aud_lbl"])}"><span class="lbl">{e(L["aud_lbl"])}</span>{audchips}</div>
     <div class="fgroup"><label for="org" class="lbl">{e(L["org_lbl"])}</label><select id="org">{org_opts}</select>
       <label class="tcheck"><input type="checkbox" id="en-only"> {e(L["eng_lbl"])}</label>
       <button type="button" class="chip" id="reset">{e(L["reset"])}</button></div>
-    <p class="srcline" style="margin:0">{e(L["legend"])}</p>
   </div>
-  <div id="nsnote" class="note warnbox" hidden style="margin:0 0 12px">{e(L["ns_note"])} <a href="{askm}" class="ltr">{MAIL}</a></div>
   <div class="fgroup" style="justify-content:space-between;margin-bottom:8px"><p class="count" id="cnt" aria-live="polite" data-tpl="{e(L["count"])}" style="margin:0">{e(L["count"].format(n=len(data)))}</p>
     <span><button type="button" class="chip" id="expand">{e(L["expand"])}</button> <button type="button" class="chip" id="collapse">{e(L["collapse"])}</button></span></div>
   <div id="list">{"".join(sections)}</div>
   <div class="empty" id="empty">{e(L["none"])}</div>
-</div></section>
-<section class="s alt" id="who"><div class="wrap">
-  <h2 class="u">{e(L["who_h"])}</h2>
-  <div class="cmp">{"".join(cmp_rows)}</div>
-  <p style="margin-top:14px"><a class="btn solid" href="{askm}">{e(L["care"])}</a></p>
 </div></section>'''
     write(lang, "links", page(lang, "links", L["title"], L["desc"], body, scripts=["common.js","links.js"], cur="links"))
 
@@ -451,7 +376,65 @@ def contact(lang):
 </div></section>'''
     write(lang, "contact", page(lang, "contact", c["title"], c["desc"], body, scripts=["contact.js"], cur="contact"))
 
+# ---------------------------------------------------------------- JOURNEY
+import journey_data as JD
+J = {
+ "ar": dict(title="مسار الموظف: حقوقك وما عليك", desc="مسار الموظف في الانتقال إلى الصحة القابضة: حقوقك وما عليك في كل مرحلة، مع مصدر رسمي لكل بند.",
+  h1="مسار الموظف", p="من قبل الانتقال إلى ما بعده: ما الذي تحصل عليه، وما الذي عليك فعله. لكل بند مصدر رسمي.",
+  right="حقّك", todo="عليك", src="المصدر:", faq="السؤال في الأسئلة الشائعة", unk_ask="اسأل قسم العناية بالموظفين",
+  empty="لا بنود في هذه المرحلة لوضعك المختار. راجع قسم العناية بالموظفين.",
+  rule="هذا الدليل يعرض ما نُشر رسمياً فقط، ولا يحلّ محل العقد المرسل إليك. لا نذكر مواعيد إرسال طلبات الانتقال لأنها لم تُعلن.",
+  jump="المراحل", note_lbl="ملاحظة", ns_lbl="ملاحظة بحسب الجنسية (من نص رسمي):"),
+ "en": dict(title="My journey: your rights and what to do", desc="The employee journey for the move to Health Holding: your rights and what you must do at each stage, with an official source for every item.",
+  h1="My journey", p="From before the transfer to after it: what you get, and what you need to do. Every item has an official source.",
+  right="Your right", todo="You do", src="Source:", faq="The question in our FAQ", unk_ask="Ask the Employee Care Department",
+  empty="No items in this stage for your selection. Ask the Employee Care Department.",
+  rule="This guide shows only what has been published officially and does not replace the contract sent to you. We do not state when transfer requests will be sent, because no date has been announced.",
+  jump="Stages", note_lbl="Note", ns_lbl="Nationality note (from an official text):"),
+}
+
+def journey(lang):
+    j = J[lang]; i = 0 if lang == "ar" else 1; sel = JD.SEL[lang]; un = JD.UNKNOWN[lang]
+    def opts(lst): return "".join(f'<option value="{e(v)}">{e(l)}</option>' for v, l in lst)
+    stages = []; jump = []; n_items = 0
+    for st in JD.STAGES:
+        its = []
+        for it in st["items"]:
+            n_items += 1
+            srcs = " · ".join(f'<a href="{e(JD.SRC[k][2])}" rel="noopener" target="_blank">{e(JD.SRC[k][i])}</a>' for k in it["src"])
+            faqs = " ".join(f'<a class="fqref" href="faq.html#q{x}">{e(str(x))}</a>' for x in it["faq"])
+            fq = f'<span class="fqs">{e(j["faq"])}: {faqs}</span>' if faqs else ""
+            ns = ""
+            if it.get("ns"):
+                ns = f'<p class="nsn"><b>{e(j["ns_lbl"])}</b> {e(it["ns"][i])} <a href="{e(JD.SRC[it["ns"][2]][2])}" rel="noopener" target="_blank">{e(JD.SRC[it["ns"][2]][i])}</a></p>'
+            kind = j["right"] if it["k"] == "r" else j["todo"]
+            its.append(f'<li class="ji {it["k"]}" data-emp="{it["emp"]}" data-svc="{it["svc"]}"><span class="kind">{e(kind)}</span>'
+                       f'<p>{e(it["ar" if lang == "ar" else "en"])}</p>{ns}<p class="cite">{e(j["src"])} {srcs}{(" · " + fq) if fq else ""}</p></li>')
+        sid = st["id"]
+        stages.append(f'<section class="stage" id="{sid}" data-stage="{sid}"><h2><span class="num"></span>{e(st["t"][i])}</h2><p class="sd">{e(st["d"][i])}</p>'
+                      f'<ul class="jl">{"".join(its)}</ul><p class="empty-st" hidden>{e(j["empty"])}</p></section>')
+        jump.append(f'<a href="#{sid}">{e(st["t"][i])}</a>')
+    unk = "".join(f"<li>{e(x)}</li>" for x in un["items"])
+    selhtml = (f'<div class="jsel" id="jsel"><h2>{e(sel["h"])}</h2><p>{e(sel["p"])}</p>'
+               f'<div class="jrow"><label for="s-emp">{e(sel["emp_l"])}</label><select id="s-emp">{opts(sel["emp"])}</select></div>'
+               f'<div class="jrow"><label for="s-svc">{e(sel["svc_l"])}</label><select id="s-svc">{opts(sel["svc"])}</select></div>'
+               f'<div class="jrow"><button type="button" class="chip" id="s-reset">{e(sel["reset"])}</button>'
+               f'<span id="s-count" aria-live="polite" data-tpl="{e(sel["shown"])}"></span></div>'
+               f'<p class="srcline">{e(sel["how"])}</p></div>')
+    body = f'''<section class="page-head"><div class="wrap"><h1>{e(j["h1"])}</h1><p>{e(j["p"])}</p></div></section>
+<section class="s"><div class="wrap">
+  {selhtml}
+  <nav class="jump" aria-label="{e(j["jump"])}">{"".join(jump)}</nav>
+  <div id="journey">{"".join(stages)}</div>
+  <div class="unk" id="unknowns"><h2>{e(un["h"])}</h2><p>{e(un["p"])}</p><ul>{unk}</ul>
+    <p><a class="btn solid" href="mailto:{MAIL}">{e(j["unk_ask"])}</a> <span class="ltr">{MAIL}</span> · {e(t_ext(lang))}</p></div>
+  <div class="note warnbox">{e(j["rule"])}</div>
+</div></section>'''
+    write(lang, "journey", page(lang, "journey", j["title"], j["desc"], body, scripts=["journey.js"], cur="journey"))
+
+def t_ext(lang): return S[lang]["ext"]
+
 if __name__ == "__main__":
     for lg in ("ar", "en"):
-        home(lg); faq(lg); links(lg); contact(lg)
+        home(lg); journey(lg); faq(lg); links(lg); contact(lg)
     print("built")
