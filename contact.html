@@ -3,13 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>نموذج التواصل | نطاق شقراء الصحي</title>
-<meta name="description" content="نموذج موحد للاستفسار أو الشكوى أو الاقتراح أو طلب المعلومات يُرسل إلى قسم العناية بالموظفين في نطاق شقراء الصحي.">
+<title>طريقة التواصل مع قسم العناية بالموظفين | نطاق شقراء الصحي</title>
+<meta name="description" content="دليل التواصل مع قسم العناية بالموظفين في نطاق شقراء الصحي: البريد والتحويلة وفتح تذكرة ومتابعتها.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/site.css">
 </head>
 <body>
+
 <header class="top">
   <div class="wrap">
     <a class="brand" href="index.html#top" aria-label="نطاق شقراء الصحي – تجمع الرياض الصحي الثالث">
@@ -18,12 +19,11 @@
       <span class="name">نطاق شقراء الصحي<small>تجمع الرياض الصحي الثالث</small></span>
     </a>
     <nav aria-label="التنقل">
-      <a href="index.html#what">ما هو التحول؟</a>
-      <a href="index.html#you">ماذا يعني لي؟</a>
-      <a href="index.html#timeline">مراحل الرحلة</a>
+      <a href="index.html#guide">دليل الموظف</a>
       <a href="faq.html">الأسئلة الشائعة</a>
-      <a href="index.html#office">مكتب العناية بالموظفين</a>
-      <a href="contact.html" class="cur" aria-current="page">نموذج التواصل</a>
+      <a href="contact.html" class="cur" aria-current="page">التواصل مع العناية بالموظفين</a>
+      <a href="https://shaqra-transition-campaign-4d8709-84-8-127-235.sslip.io/ticket">تذكرة جديدة</a>
+      <a href="https://shaqra-transition-campaign-4d8709-84-8-127-235.sslip.io/status">متابعة تذكرة</a>
     </nav>
   </div>
 </header>
@@ -31,158 +31,90 @@
 <section class="page-head">
   <div class="wrap">
     <span class="tag">استفسار · شكوى · اقتراح · طلب معلومات</span>
-    <h1>نموذج التواصل مع قسم العناية بالموظفين</h1>
-    <p>عبّئ النموذج وسيُجهَّز لك بريد جاهز موجَّه إلى قسم العناية بالموظفين برقم مرجعي. يمكنك أيضًا الاتصال على التحويلة 671.</p>
+    <h1>كيف أتواصل مع قسم العناية بالموظفين؟</h1>
+    <p>ثلاث طرق للتواصل. نوصي بفتح تذكرة لأنها تعطيك رقمًا لمتابعة طلبك، وتصل بياناتك للقسم كاملة.</p>
   </div>
   <svg class="wave" viewBox="0 0 1440 90" preserveAspectRatio="none" aria-hidden="true"><path d="M0 40C240 -10 480 10 720 40S1200 85 1440 30V90H0z" fill="#8fc3ec" opacity=".55"/><path d="M0 55C260 10 520 30 760 58S1210 88 1440 50V90H0z" fill="#2b7fc4"/><path d="M0 70C280 40 560 55 800 72S1230 92 1440 70V90H0z" fill="#1b4784"/></svg>
 </section>
 
 <section style="padding-top:34px">
   <div class="wrap">
-    <div class="warn"><b>تنبيه مؤقت:</b> النموذج حاليًا يجهّز رسالة بريد إلكتروني على جهازك ولا يخزّن أي بيانات في خادم. سيتم ربطه بنظام استقبال فعلي لاحقًا. الرقم المرجعي المعروض مرجع محلي لك فقط، ويفضّل ذكره عند أي متابعة. لا تكتب كلمات مرور أو بيانات بنكية.</div>
-
-    <form class="formcard" id="f" novalidate>
-      <div class="field" id="g-type">
-        <span class="legend" id="lg-type">نوع الطلب<span class="req">*</span></span>
-        <div class="types" role="radiogroup" aria-labelledby="lg-type">
-          <label><input type="radio" name="type" value="استفسار"> استفسار</label>
-          <label><input type="radio" name="type" value="شكوى"> شكوى</label>
-          <label><input type="radio" name="type" value="اقتراح"> اقتراح</label>
-          <label><input type="radio" name="type" value="طلب معلومات"> طلب معلومات</label>
-        </div>
-        <span class="err">اختر نوع الطلب.</span>
-      </div>
-
-      <div class="frow">
-        <div class="field" id="g-name"><label for="name">الاسم<span class="req">*</span></label>
-          <input type="text" id="name" name="name" autocomplete="name" maxlength="80"><span class="err">اكتب اسمك (3 أحرف على الأقل).</span></div>
-        <div class="field" id="g-emp"><label for="emp">الرقم الوظيفي<span class="req">*</span></label>
-          <input type="text" id="emp" name="emp" inputmode="text" dir="ltr" style="text-align:right" maxlength="15"><span class="err">الرقم الوظيفي من 3 إلى 15 خانة (أرقام وحروف إنجليزية فقط).</span></div>
-      </div>
-
-      <div class="frow">
-        <div class="field" id="g-fac"><label for="fac">المنشأة<span class="req">*</span></label>
-          <select id="fac" name="fac"><option value="">اختر المنشأة</option><option>مستشفى شقراء العام</option><option>مستشفى ثادق العام</option><option>مستشفى مرات</option><option>مراكز الرعاية الأولية</option></select><span class="err">اختر المنشأة.</span></div>
-        <div class="field" id="g-job"><label for="job">الفئة الوظيفية<span class="req">*</span></label>
-          <select id="job" name="job"><option value="">اختر الفئة</option><option>طبيب</option><option>تمريض</option><option>صيدلة</option><option>مختبر وأشعة وفنيون صحيون</option><option>إداري ومالي</option><option>هندسة وصيانة</option><option>خدمات مساندة</option><option>أخرى</option></select><span class="err">اختر الفئة الوظيفية.</span></div>
-      </div>
-
-      <div class="field" id="g-msg"><label for="msg">نص الرسالة<span class="req">*</span></label>
-        <textarea id="msg" name="msg" maxlength="1200" placeholder="اكتب استفسارك أو ملاحظتك بوضوح…"></textarea>
-        <div class="counter"><span id="cnt">0</span> / 1200</div>
-        <span class="err">اكتب رسالتك (10 أحرف على الأقل).</span></div>
-
-      <div class="frow">
-        <div class="field" id="g-mail"><label for="mail">البريد الإلكتروني<span class="opt">اختياري</span></label>
-          <input type="email" id="mail" name="mail" dir="ltr" style="text-align:right" autocomplete="email"><span class="err">صيغة البريد غير صحيحة.</span></div>
-        <div class="field" id="g-tel"><label for="tel">رقم الجوال<span class="opt">اختياري</span></label>
-          <input type="tel" id="tel" name="tel" dir="ltr" style="text-align:right" placeholder="05xxxxxxxx" autocomplete="tel"><span class="err">اكتب رقم جوال سعودي صحيح (05xxxxxxxx أو +9665xxxxxxxx).</span></div>
-      </div>
-
-      <div class="btns" style="margin-top:6px">
-        <button type="submit" class="btn solid">تجهيز البريد</button>
-        <button type="reset" class="btn" id="reset">مسح النموذج</button>
-      </div>
-      <p class="hint" style="margin:12px 0 0">عند الضغط على «تجهيز البريد» يُفتح برنامج البريد لديك برسالة موجهة إلى R3-shqra-hrcs@moh.gov.sa. إن لم يفتح، استخدم زر «نسخ النص» وأرسله يدويًا.</p>
-    </form>
-
-    <div class="result" id="result" role="status" aria-live="polite" tabindex="-1">
-      <h3>تم تجهيز رسالتك</h3>
-      <div>رقمك المرجعي: <span class="ref" id="ref"></span></div>
-      <p style="margin:6px 0 0">لم تُرسل الرسالة بعد: أكمل الإرسال من برنامج البريد الذي فُتح. وإن لم يفتح فاستخدم الأزرار أدناه.</p>
-      <pre id="preview"></pre>
-      <div class="btns">
-        <a class="btn solid" id="again" href="#">فتح البريد مرة أخرى</a>
-        <button type="button" class="btn" id="copytxt">نسخ النص</button>
-        <button type="button" class="btn" id="copymail" data-email="R3-shqra-hrcs@moh.gov.sa">نسخ البريد</button>
-        <span id="copied2" style="display:none;color:#05724f;align-self:center;font-size:14px">تم النسخ</span>
-      </div>
+    <h2>قنوات التواصل</h2>
+    <div class="grid">
+      <div class="card"><h3>1) تذكرة إلكترونية (الأفضل)</h3><p>عبّئ النموذج واستلم رقم تذكرة، وتابع حالتها والرد من صفحة المتابعة.</p><p style="margin-top:12px"><a class="btn solid" href="https://shaqra-transition-campaign-4d8709-84-8-127-235.sslip.io/ticket">فتح تذكرة جديدة</a> <a class="btn" href="https://shaqra-transition-campaign-4d8709-84-8-127-235.sslip.io/status">متابعة تذكرة</a></p></div>
+      <div class="card"><h3>2) البريد الإلكتروني</h3><p dir="ltr" style="text-align:right"><b>R3-shqra-hrcs@moh.gov.sa</b></p><p style="margin-top:12px"><a class="btn" href="mailto:R3-shqra-hrcs@moh.gov.sa">اكتب بريدًا</a> <button type="button" class="btn" id="copy" data-email="R3-shqra-hrcs@moh.gov.sa">نسخ البريد</button><span id="copied" role="status">تم النسخ</span></p></div>
+      <div class="card"><h3>3) الهاتف</h3><p>التحويلة <b>671</b> (قسم العناية بالموظفين).</p></div>
     </div>
+  </div>
+</section>
 
-    <p class="faq-note" style="margin-top:22px">قد تجد جوابك أسرع في <a href="faq.html">خدمة الأسئلة الشائعة</a>. للتواصل المباشر: <a href="mailto:R3-shqra-hrcs@moh.gov.sa?subject=%D8%A7%D8%B3%D8%AA%D9%81%D8%B3%D8%A7%D8%B1%20%D8%B9%D9%86%20%D9%85%D8%B1%D8%AD%D9%84%D8%A9%20%D8%A7%D9%84%D8%AA%D8%AD%D9%88%D9%84">R3-shqra-hrcs@moh.gov.sa</a> · التحويلة 671.</p>
+<section class="alt">
+  <div class="wrap">
+    <h2>خطوات فتح التذكرة</h2>
+    <ol class="steps">
+      <li><b>جهّز بياناتك:</b> بريدك الوزاري المنتهي بـ <span dir="ltr">@moh.gov.sa</span>، ورقم جوالك (05XXXXXXXX)، ورقمك الوظيفي. هذه البيانات إلزامية لنتمكن من التواصل معك.</li>
+      <li><b>افتح <a href="https://shaqra-transition-campaign-4d8709-84-8-127-235.sslip.io/ticket">صفحة التذكرة</a></b> وعبّئ الاسم والمنشأة والفئة الوظيفية.</li>
+      <li><b>اختر نوع الطلب:</b> استفسار، شكوى، اقتراح، أو طلب معلومات.</li>
+      <li><b>اكتب طلبك بوضوح</b> في سطور قليلة، واذكر ما يلزم لفهم حالتك. لا تكتب كلمات مرور أو بيانات بنكية.</li>
+      <li><b>أرسل الطلب</b> واحتفظ برقم التذكرة الذي يظهر لك (بصيغة SHQ-XXXXXX-XXXXX).</li>
+    </ol>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>ماذا يحدث بعد الإرسال؟</h2>
+    <div class="grid">
+      <div class="card"><h3>رقم التذكرة</h3><p>يظهر لك مباشرة بعد الإرسال. احتفظ به لأنه لا يُرسل لك بالبريد حاليًا.</p></div>
+      <div class="card"><h3>مراجعة القسم</h3><p>تصل التذكرة إلى لوحة قسم العناية بالموظفين، وقد يتواصل معك القسم على بريدك الوزاري أو جوالك.</p></div>
+      <div class="card"><h3>حالة الطلب</h3><p>تتغير حالة التذكرة بين: جديدة، قيد المعالجة، مغلقة.</p></div>
+      <div class="card"><h3>الرد</h3><p>إذا أضاف القسم ردًا يظهر لك في <a href="https://shaqra-transition-campaign-4d8709-84-8-127-235.sslip.io/status">صفحة المتابعة</a> بإدخال رقم التذكرة وبريدك الوزاري.</p></div>
+    </div>
+    <p class="note" style="margin-top:18px">لم يُعلن موعد محدد للرد، فلا نعدك بمدة. للأمور العاجلة اتصل على التحويلة 671.</p>
+  </div>
+</section>
+
+<section class="alt">
+  <div class="wrap">
+    <h2>أنواع الطلبات</h2>
+    <div class="grid">
+      <div class="card"><h3>استفسار</h3><p>سؤال عن إجراء أو حالتك الوظيفية. جرّب أولًا <a href="faq.html">الأسئلة الشائعة</a>.</p></div>
+      <div class="card"><h3>شكوى</h3><p>ملاحظة على إجراء أو تعامل تحتاج متابعة.</p></div>
+      <div class="card"><h3>اقتراح</h3><p>فكرة لتحسين تجربة الانتقال أو خدمات الموظفين.</p></div>
+      <div class="card"><h3>طلب معلومات</h3><p>طلب بيان أو معلومة محددة.</p></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>إن فضّلت البريد الإلكتروني</h2>
+    <p class="lead">اكتب في الرسالة: الاسم، الرقم الوظيفي، رقم الجوال، المنشأة، ونوع الطلب. وأرسلها من بريدك الوزاري إلى <b dir="ltr">R3-shqra-hrcs@moh.gov.sa</b>.</p>
+    <p class="faq-note"><b>الخصوصية:</b> تُستخدم بيانات التذكرة للتواصل معك بخصوص طلبك فقط، ويطّلع عليها قسم العناية بالموظفين. لا تُرسل كلمات مرور أو بيانات بنكية. تفاصيل مدة الاحتفاظ بالبيانات تُحدَّد بالاتفاق مع القسم.</p>
   </div>
 </section>
 </main>
+
 <footer>
   <div class="wrap">
-    <b>نطاق شقراء الصحي – تجمع الرياض الصحي الثالث · حملة توعية داخلية</b>
-    <div>صفحة توعوية تهدف لتسهيل الوصول للمعلومة المنشورة. المرجع الرسمي هو الصحة القابضة والجهات المختصة.</div>
+    <b>نطاق شقراء الصحي – تجمع الرياض الصحي الثالث · دليل الموظف</b>
+    <div>دليل يجمع الروابط الرسمية المنشورة لتسهيل الوصول إليها. المرجع الرسمي هو الصحة القابضة والجهات المختصة. هذه الصفحة ليست موقعًا حكوميًا رسميًا.</div>
     <ul>
       <li><a href="https://www.health.sa/ar/faqs" target="_blank" rel="noopener">الصحة القابضة – الأسئلة الشائعة</a></li>
-      <li><a href="https://www.moh.gov.sa/en/ministry/mediacenter/news/pages/news-2026-05-04-001.aspx" target="_blank" rel="noopener">وزارة الصحة – صرف مكافآت الانتقال</a></li>
       <li><a href="https://www.r3-health.net/ar/" target="_blank" rel="noopener">تجمع الرياض الصحي الثالث</a></li>
+      <li><a href="https://shaqra-transition-campaign-4d8709-84-8-127-235.sslip.io/ticket">تذكرة جديدة</a></li>
+      <li><a href="https://shaqra-transition-campaign-4d8709-84-8-127-235.sslip.io/status">متابعة تذكرة</a></li>
     </ul>
-    <div class="fc"><b>تواصل معنا – قسم العناية بالموظفين:</b> <a href="mailto:R3-shqra-hrcs@moh.gov.sa?subject=%D8%A7%D8%B3%D8%AA%D9%81%D8%B3%D8%A7%D8%B1%20%D8%B9%D9%86%20%D9%85%D8%B1%D8%AD%D9%84%D8%A9%20%D8%A7%D9%84%D8%AA%D8%AD%D9%88%D9%84">R3-shqra-hrcs@moh.gov.sa</a> · التحويلة 671</div>
+    <div class="fc"><b>قسم العناية بالموظفين:</b> <a href="mailto:R3-shqra-hrcs@moh.gov.sa">R3-shqra-hrcs@moh.gov.sa</a> · تحويلة 671</div>
   </div>
 </footer>
 
 <script>
-(function(){
-  var MAIL="R3-shqra-hrcs@moh.gov.sa";
-  var f=document.getElementById('f');
-  function $(i){return document.getElementById(i);}
-  function setBad(id,bad){$(id).classList.toggle('bad',!!bad);return !bad;}
-  function digits(s){return s.replace(/[\u0660-\u0669]/g,function(d){return String(d.charCodeAt(0)-0x660);}).replace(/[\u06F0-\u06F9]/g,function(d){return String(d.charCodeAt(0)-0x6F0);});}
-  var msg=$('msg');
-  msg.addEventListener('input',function(){$('cnt').textContent=msg.value.length;});
-  function validate(){
-    var ok=true,first=null;
-    function chk(id,good){var r=setBad(id,!good);if(!r){ok=false;if(!first)first=id;}}
-    chk('g-type',!!f.querySelector('input[name=type]:checked'));
-    chk('g-name',f.name.value.trim().length>=3);
-    var emp=digits(f.emp.value.trim());
-    chk('g-emp',/^[A-Za-z0-9]{3,15}$/.test(emp));
-    chk('g-fac',!!f.fac.value);
-    chk('g-job',!!f.job.value);
-    var m=f.msg.value.trim();
-    chk('g-msg',m.length>=10&&m.length<=1200);
-    var mail=f.mail.value.trim();
-    chk('g-mail',!mail||/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(mail));
-    var tel=digits(f.tel.value.replace(/[\s-]/g,''));
-    chk('g-tel',!tel||/^(05\d{8}|\+9665\d{8}|009665\d{8})$/.test(tel));
-    if(first){var el=$(first);el.scrollIntoView({behavior:'smooth',block:'center'});var inp=el.querySelector('input,select,textarea');if(inp)inp.focus();}
-    return ok;
-  }
-  function refNo(){
-    var d=new Date(),p=function(n){return (n<10?'0':'')+n;};
-    var day=d.getFullYear()+p(d.getMonth()+1)+p(d.getDate());
-    var n=1;
-    try{var k='shq_ref_'+day;n=(parseInt(localStorage.getItem(k)||'0',10)||0)+1;localStorage.setItem(k,String(n));}catch(e){n=Math.floor(Math.random()*9000)+1;}
-    var rnd=Math.floor(Math.random()*90)+10;
-    return 'SHQ-'+day+'-'+('000'+n).slice(-3)+'-'+rnd;
-  }
-  var lastUrl='',lastText='';
-  f.addEventListener('submit',function(e){
-    e.preventDefault();
-    if(!validate())return;
-    var type=f.querySelector('input[name=type]:checked').value;
-    var ref=refNo();
-    var subject='['+type+'] '+f.fac.value+' – مرجع '+ref;
-    var lines=['نوع الطلب: '+type,'الاسم: '+f.name.value.trim(),'الرقم الوظيفي: '+digits(f.emp.value.trim()),'المنشأة: '+f.fac.value,'الفئة الوظيفية: '+f.job.value];
-    if(f.mail.value.trim())lines.push('البريد الإلكتروني للرد: '+f.mail.value.trim());
-    if(f.tel.value.trim())lines.push('الجوال: '+digits(f.tel.value.replace(/[\s-]/g,'')));
-    lines.push('الرقم المرجعي: '+ref,'','نص الرسالة:',f.msg.value.trim(),'','— أُعدّت من نموذج التواصل لحملة نطاق شقراء الصحي (إرسال مؤقت عبر البريد).');
-    lastText='إلى: '+MAIL+'\nالموضوع: '+subject+'\n\n'+lines.join('\n');
-    lastUrl='mailto:'+MAIL+'?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(lines.join('\r\n'));
-    $('ref').textContent=ref;
-    $('preview').textContent=lastText;
-    $('again').href=lastUrl;
-    var r=$('result');r.classList.add('show');r.focus();r.scrollIntoView({behavior:'smooth',block:'center'});
-    window.location.href=lastUrl;
-  });
-  f.addEventListener('reset',function(){
-    setTimeout(function(){[].forEach.call(f.querySelectorAll('.field.bad'),function(x){x.classList.remove('bad');});$('cnt').textContent='0';$('result').classList.remove('show');},0);
-  });
-  function copy(t){var m=$('copied2');function done(){m.style.display='inline';setTimeout(function(){m.style.display='none';},2500);}
-    if(navigator.clipboard){navigator.clipboard.writeText(t).then(done,done);}else{var a=document.createElement('textarea');a.value=t;document.body.appendChild(a);a.select();try{document.execCommand('copy');}catch(e){}document.body.removeChild(a);done();}}
-  $('copytxt').addEventListener('click',function(){copy(lastText);});
-  $('copymail').addEventListener('click',function(){copy(MAIL);});
-  // prefill from query string
-  var p=new URLSearchParams(location.search),t=p.get('type');
-  var map={inquiry:'استفسار',complaint:'شكوى',suggestion:'اقتراح',info:'طلب معلومات'};
-  if(t&&map[t]){var r=f.querySelector('input[name=type][value="'+map[t]+'"]');if(r)r.checked=true;}
-  if(p.get('q')){msg.value=p.get('q').slice(0,1200);$('cnt').textContent=msg.value.length;}
-})();
+document.getElementById('copy').addEventListener('click',function(){
+  var e=this.getAttribute('data-email'),m=document.getElementById('copied');
+  function done(){m.style.display='inline'}
+  if(navigator.clipboard){navigator.clipboard.writeText(e).then(done,done)}else{done()}
+});
 </script>
 </body>
 </html>

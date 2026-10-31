@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% set nav = 'status' %}
+{% block title %}متابعة تذكرة{% endblock %}
+{% block body %}
+<section class="page-head">
+  <div class="wrap"><span class="tag">متابعة الطلب</span><h1>متابعة حالة التذكرة</h1>
+  <p>أدخل رقم التذكرة والبريد الوزاري الذي استخدمته عند التقديم.</p></div>
+  <svg class="wave" viewBox="0 0 1440 90" preserveAspectRatio="none" aria-hidden="true"><path d="M0 40C240 -10 480 10 720 40S1200 85 1440 30V90H0z" fill="#8fc3ec" opacity=".55"/><path d="M0 55C260 10 520 30 760 58S1210 88 1440 50V90H0z" fill="#2b7fc4"/><path d="M0 70C280 40 560 55 800 72S1230 92 1440 70V90H0z" fill="#1b4784"/></svg>
+</section>
+<section style="padding-top:34px"><div class="wrap">
+  <form class="formcard" method="post" action="/status" id="sf" novalidate>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="frow">
+      <div class="field"><label for="ref">رقم التذكرة<span class="req">*</span></label>
+        <input type="text" id="ref" name="ref" dir="ltr" class="ltr-right" maxlength="20" placeholder="SHQ-261031-ABC23" autocomplete="off"></div>
+      <div class="field"><label for="email">البريد الإلكتروني الوزاري<span class="req">*</span></label>
+        <input type="email" id="email" name="email" dir="ltr" class="ltr-right" maxlength="120" placeholder="name@moh.gov.sa" autocomplete="email"></div>
+    </div>
+    <button class="btn solid" type="submit">عرض الحالة</button>
+  </form>
+  {% if error %}<div class="warn" role="alert" style="margin-top:20px">{{ error }}</div>{% endif %}
+  {% if result %}
+  <div class="result show" style="display:block">
+    <h3>تذكرة <span class="ref" style="font-size:20px">{{ result.ref }}</span></h3>
+    <p><b>الحالة:</b> <span class="badge st-{{ result.status }}">{{ statuses.get(result.status, result.status) }}</span></p>
+    <p><b>نوع الطلب:</b> {{ types.get(result.req_type, result.req_type) }} · <b>تاريخ التقديم:</b> {{ result.created_at|dt }} (توقيت الرياض) · <b>آخر تحديث:</b> {{ result.updated_at|dt }}</p>
+    {% if result.reply %}<p><b>رد قسم العناية بالموظفين:</b></p><pre>{{ result.reply }}</pre>{% else %}<p class="hint">لم يصل رد بعد. سيظهر هنا عند إضافته.</p>{% endif %}
+  </div>
+  {% endif %}
+  <p class="faq-note"><a href="/ticket">إنشاء تذكرة جديدة</a> · <a href="/contact.html">دليل التواصل مع العناية بالموظفين</a></p>
+</div></section>
+{% endblock %}

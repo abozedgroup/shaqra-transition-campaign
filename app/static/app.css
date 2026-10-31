@@ -1,0 +1,27 @@
+.h1s{font-size:clamp(22px,3.4vw,30px);color:var(--navy);margin:0 0 14px;line-height:1.5}
+.hp{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);opacity:0;pointer-events:none}
+.ltr-right{text-align:right}
+.privacy{background:var(--soft);border:1px solid var(--line);border-radius:12px;padding:12px 16px;font-size:14.5px;margin:6px 0 16px}
+.chk{display:flex;gap:10px;align-items:flex-start;font-weight:500;color:var(--ink)}
+.chk input{width:20px;height:20px;accent-color:var(--blue);margin-top:5px;flex:none}
+.wrap.wide{max-width:1240px}
+.adminbar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin:10px 0 18px}
+.kpi{background:linear-gradient(to left,var(--bar1),var(--bar2));color:var(--navy);padding:10px 16px;border-radius:12px}
+.kpi b{display:block;font-size:26px}
+.filters{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:8px}
+.filters select,.filters input{width:auto;min-width:150px;flex:1 1 150px}
+.filters input[type=text]{flex:3 1 260px}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px}
+.tbl{width:100%;border-collapse:collapse;font-size:15px;line-height:1.6}
+.tbl th,.tbl td{padding:9px 12px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+.tbl th{background:var(--soft);color:var(--navy)}
+.badge{display:inline-block;border-radius:99px;padding:0 12px;font-size:13.5px;font-weight:700}
+.st-new{background:#fde8e6;color:#a8322a}.st-in_progress{background:#fff3cd;color:#8a6500}.st-closed{background:#dff5ec;color:#05724f}
+.pager{display:flex;gap:10px;margin-top:14px}
+.kv{display:grid;grid-template-columns:max-content 1fr;gap:4px 18px;margin:0 0 16px}
+.kv dt{color:var(--muted);font-weight:700}.kv dd{margin:0}
+.msgbox{white-space:pre-wrap;word-break:break-word;background:var(--soft);border:1px solid var(--line);border-radius:10px;padding:12px;font:inherit;font-size:15px}
+.btn.danger{border-color:#b03a2e;color:#b03a2e}
+.delform{margin-top:22px;padding-top:16px;border-top:1px dashed var(--line)}
+.errsum{background:#fdecea;border-color:#f1a9a0;border-right-color:#b03a2e}

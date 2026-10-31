@@ -1,1 +1,6 @@
 .git
+.gitignore
+*.pyc
+__pycache__
+*.db
+.env

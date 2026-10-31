@@ -137,3 +137,21 @@ mark{background:#d8eefb;color:var(--navy);border-radius:3px;padding:0 2px}
 .empty.show{display:block}
 .askbar{margin-top:26px;max-width:860px}
 @media(max-width:640px){.formcard{padding:18px 16px}.searchbar{flex-direction:column}}
+
+/* employee guide cards */
+.chips{display:flex;flex-wrap:wrap;gap:10px;margin:6px 0 26px}
+.chips a{background:var(--soft);border:1px solid var(--line);color:var(--blue);padding:6px 16px;border-radius:99px;font-weight:700;font-size:15px;text-decoration:none}
+.chips a:hover{background:#fff;border-color:var(--sky)}
+.cat{margin-top:34px;scroll-margin-top:84px}
+.cat-h{margin:0;color:var(--navy);font-size:24px}
+.cat-sub{margin:2px 0 14px;color:#4b6075}
+.lgrid{display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(270px,1fr))}
+.lcard{background:#fff;border:1px solid var(--line);border-radius:16px;padding:16px 18px;border-top:4px solid var(--sky);display:flex;flex-direction:column;gap:6px}
+.lcard h3{margin:0;font-size:17px;line-height:1.5}
+.lcard h3 a{color:var(--blue);text-decoration:none}
+.lcard h3 a:hover{text-decoration:underline}
+.lcard p{margin:0;font-size:15px;flex:1}
+.lcard .org{font-size:13px;color:#fff;background:var(--navy);align-self:flex-start;padding:1px 10px;border-radius:99px}
+.lcard .chk{font-size:13px;color:#5a6f84}
+.lcard.note-card{background:#fff8e6;border-color:#f0d58a;border-top-color:#e0a800}
+.lcard.note-card .org{background:#8a6500}

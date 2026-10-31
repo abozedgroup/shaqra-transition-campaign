@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>{% block title %}{% endblock %} | نطاق شقراء الصحي</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/site.css">
+<link rel="stylesheet" href="/app-static/app.css">
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="/" aria-label="نطاق شقراء الصحي – تجمع الرياض الصحي الثالث">
+      <img src="/assets/health-holding-logo-color.svg" alt="شعار الصحة القابضة – Health Holding">
+      <span class="sep" aria-hidden="true"></span>
+      <span class="name">نطاق شقراء الصحي<small>تجمع الرياض الصحي الثالث</small></span>
+    </a>
+    <nav aria-label="التنقل">
+      <a href="/#guide">دليل الموظف</a>
+      <a href="/faq.html">الأسئلة الشائعة</a>
+      <a href="/contact.html">التواصل مع العناية بالموظفين</a>
+      <a href="/ticket" {% if nav=='ticket' %}class="cur"{% endif %}>تذكرة جديدة</a>
+      <a href="/status" {% if nav=='status' %}class="cur"{% endif %}>متابعة تذكرة</a>
+    </nav>
+  </div>
+</header>
+<main>
+{% block body %}{% endblock %}
+</main>
+<footer>
+  <div class="wrap">
+    <b>نطاق شقراء الصحي – تجمع الرياض الصحي الثالث · حملة توعية داخلية</b>
+    <div class="fc"><b>قسم العناية بالموظفين:</b> <a href="mailto:R3-shqra-hrcs@moh.gov.sa">R3-shqra-hrcs@moh.gov.sa</a> · التحويلة 671</div>
+  </div>
+</footer>
+{% block scripts %}{% endblock %}
+</body>
+</html>

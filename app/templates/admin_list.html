@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}لوحة التذاكر{% endblock %}
+{% block body %}
+<section style="padding-top:30px"><div class="wrap wide">
+  <div class="adminbar">
+    <h1 class="h1s">لوحة تذاكر العناية بالموظفين</h1>
+    <form method="post" action="/admin/logout"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn" type="submit">خروج</button></form>
+  </div>
+  <div class="kpis">
+    <div class="kpi"><b>{{ counts.get('new',0) }}</b><span>جديدة</span></div>
+    <div class="kpi"><b>{{ counts.get('in_progress',0) }}</b><span>قيد المعالجة</span></div>
+    <div class="kpi"><b>{{ counts.get('closed',0) }}</b><span>مغلقة</span></div>
+    <div class="kpi"><b>{{ counts.values()|sum }}</b><span>الإجمالي</span></div>
+  </div>
+  <form class="filters" method="get" action="/admin">
+    <select name="status"><option value="">كل الحالات</option>{% for k,l in statuses.items() %}<option value="{{k}}" {% if f.status==k %}selected{% endif %}>{{l}}</option>{% endfor %}</select>
+    <select name="type"><option value="">كل الأنواع</option>{% for k,l in types.items() %}<option value="{{k}}" {% if f.type==k %}selected{% endif %}>{{l}}</option>{% endfor %}</select>
+    <select name="facility"><option value="">كل المنشآت</option>{% for x in facilities %}<option {% if f.facility==x %}selected{% endif %}>{{x}}</option>{% endfor %}</select>
+    <input type="text" name="q" value="{{ f.q }}" placeholder="بحث: رقم التذكرة، اسم، رقم وظيفي، بريد، جوال، نص">
+    <button class="btn solid" type="submit">تصفية</button>
+    <a class="btn" href="/admin/export.csv{% if qs %}?{{ qs }}{% endif %}">تصدير CSV</a>
+  </form>
+  <p class="count">{{ total }} تذكرة</p>
+  <div class="tablewrap"><table class="tbl">
+    <thead><tr><th>الرقم</th><th>التاريخ</th><th>النوع</th><th>الاسم</th><th>الرقم الوظيفي</th><th>المنشأة</th><th>الحالة</th></tr></thead>
+    <tbody>
+    {% for r in rows %}
+      <tr><td><a href="/admin/t/{{ r.ref }}" dir="ltr">{{ r.ref }}</a></td><td>{{ r.created_at|dt }}</td><td>{{ types.get(r.req_type, r.req_type) }}</td><td>{{ r.name }}</td><td dir="ltr">{{ r.emp_no }}</td><td>{{ r.facility }}</td><td><span class="badge st-{{ r.status }}">{{ statuses.get(r.status, r.status) }}</span></td></tr>
+    {% else %}<tr><td colspan="7" style="text-align:center">لا توجد تذاكر.</td></tr>{% endfor %}
+    </tbody></table></div>
+  <div class="pager">
+    {% if page>1 %}<a class="btn" href="/admin?page={{ page-1 }}{% if qs %}&{{ qs }}{% endif %}">السابق</a>{% endif %}
+    {% if page*per < total %}<a class="btn" href="/admin?page={{ page+1 }}{% if qs %}&{{ qs }}{% endif %}">التالي</a>{% endif %}
+  </div>
+</div></section>
+{% endblock %}

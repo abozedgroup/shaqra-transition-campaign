@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}تذكرة {{ t.ref }}{% endblock %}
+{% block body %}
+<section style="padding-top:30px"><div class="wrap">
+  <p><a href="/admin">← العودة للوحة</a></p>
+  <div class="formcard">
+    <h1 class="h1s">تذكرة <span class="ref" style="font-size:22px">{{ t.ref }}</span> <span class="badge st-{{ t.status }}">{{ statuses.get(t.status, t.status) }}</span></h1>
+    {% if saved %}<div class="result show" style="display:block;margin:0 0 16px"><b>تم الحفظ.</b></div>{% endif %}
+    <dl class="kv">
+      <dt>نوع الطلب</dt><dd>{{ types.get(t.req_type, t.req_type) }}</dd>
+      <dt>الاسم</dt><dd>{{ t.name }}</dd>
+      <dt>الرقم الوظيفي</dt><dd dir="ltr">{{ t.emp_no }}</dd>
+      <dt>البريد</dt><dd dir="ltr"><a href="mailto:{{ t.email }}">{{ t.email }}</a></dd>
+      <dt>الجوال</dt><dd dir="ltr">{{ t.mobile }}</dd>
+      <dt>المنشأة</dt><dd>{{ t.facility }}</dd>
+      <dt>الفئة الوظيفية</dt><dd>{{ t.job_cat }}</dd>
+      <dt>تاريخ التقديم</dt><dd>{{ t.created_at|dt }} (توقيت الرياض)</dd>
+      <dt>آخر تحديث</dt><dd>{{ t.updated_at|dt }}</dd>
+    </dl>
+    <h3>نص الطلب</h3><pre class="msgbox">{{ t.message }}</pre>
+    <form method="post" action="/admin/t/{{ t.ref }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="field"><label for="status">الحالة</label>
+        <select id="status" name="status">{% for k,l in statuses.items() %}<option value="{{k}}" {% if t.status==k %}selected{% endif %}>{{l}}</option>{% endfor %}</select></div>
+      <div class="field"><label for="reply">الرد على الموظف <span class="opt">(يظهر له في صفحة المتابعة)</span></label>
+        <textarea id="reply" name="reply" maxlength="3000">{{ t.reply }}</textarea></div>
+      <div class="field"><label for="note">ملاحظة داخلية <span class="opt">(لا تظهر للموظف)</span></label>
+        <textarea id="note" name="note" maxlength="3000" style="min-height:90px">{{ t.note }}</textarea></div>
+      <button class="btn solid" type="submit">حفظ</button>
+    </form>
+    <form method="post" action="/admin/t/{{ t.ref }}/delete" class="delform" data-confirm="حذف التذكرة نهائيًا؟ لا يمكن التراجع.">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn danger" type="submit">حذف التذكرة نهائيًا</button>
+    </form>
+  </div>
+</div></section>
+{% endblock %}
+{% block scripts %}<script src="/app-static/admin.js"></script>{% endblock %}

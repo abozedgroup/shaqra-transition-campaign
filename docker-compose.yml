@@ -2,5 +2,14 @@ services:
   web:
     build: .
     restart: unless-stopped
+    environment:
+      ADMIN_USER: ${ADMIN_USER}
+      ADMIN_PASSWORD_HASH: ${ADMIN_PASSWORD_HASH}
+      DB_PATH: /data/tickets.db
+    volumes:
+      - shq_data:/data
     expose:
-      - "80"
+      - "8080"
+
+volumes:
+  shq_data:

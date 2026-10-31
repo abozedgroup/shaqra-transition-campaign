@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}دخول فريق العناية بالموظفين{% endblock %}
+{% block body %}
+<section style="padding-top:50px"><div class="wrap">
+  <form class="formcard" method="post" action="/admin/login" style="max-width:480px;margin:0 auto" autocomplete="off">
+    <h1 class="h1s">دخول فريق العناية بالموظفين</h1>
+    {% if not configured %}<div class="warn">لوحة التحكم غير مفعّلة بعد (لم تُضبط بيانات الدخول).</div>{% endif %}
+    {% if error %}<div class="warn" role="alert">{{ error }}</div>{% endif %}
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="field"><label for="u">اسم المستخدم</label><input type="text" id="u" name="username" dir="ltr" class="ltr-right" autocomplete="username" required></div>
+    <div class="field"><label for="p">كلمة المرور</label><input type="password" id="p" name="password" dir="ltr" class="ltr-right" autocomplete="current-password" required></div>
+    <button class="btn solid" type="submit">دخول</button>
+  </form>
+</div></section>
+{% endblock %}

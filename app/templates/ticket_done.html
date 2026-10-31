@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}تم استلام طلبك{% endblock %}
+{% block body %}
+<section><div class="wrap">
+{% if ref %}
+  <div class="result show" style="display:block">
+    <h3>تم استلام طلبك</h3>
+    <p>رقم تذكرتك:</p>
+    <p><span class="ref">{{ ref }}</span></p>
+    <p><b>احتفظ بهذا الرقم</b>؛ لا يظهر مرة أخرى. تتابع حالة طلبك من <a href="/status">صفحة المتابعة</a> برقم التذكرة وبريدك الوزاري. سيتواصل معك قسم العناية بالموظفين عبر بريدك الوزاري أو رقم جوالك عند الحاجة.</p>
+    <p><a class="btn solid" href="/status">متابعة التذكرة</a> <a class="btn" href="/">الرئيسية</a></p>
+  </div>
+{% else %}
+  <div class="formcard"><h1 class="h1s">لا توجد تذكرة لعرضها</h1><p>إن كنت قد أرسلت طلبًا للتو فاحتفظ برقم التذكرة الظاهر لك، أو <a href="/ticket">أنشئ تذكرة جديدة</a>.</p></div>
+{% endif %}
+</div></section>
+{% endblock %}
