@@ -325,7 +325,7 @@ def ticket_form():
     if request.method == "POST":
         check_csrf()
         ip = client_ip()
-        if rate_hit("tc:" + ip, 5, 600) or rate_hit("td:" + ip, 20, 86400):
+        if rate_hit("tc:" + ip, 15, 600) or rate_hit("td:" + ip, 300, 86400):
             abort(429)
         if request.form.get("website"):  # honeypot
             return redirect(url_for("ticket_done"))
@@ -367,7 +367,7 @@ def status_lookup():
     if request.method == "POST":
         check_csrf()
         ip = client_ip()
-        if rate_hit("sl:" + ip, 10, 600):
+        if rate_hit("sl:" + ip, 30, 600):
             abort(429)
         ref = clean(request.form.get("ref"), 30).upper()
         email = clean(request.form.get("email"), 120).lower()
