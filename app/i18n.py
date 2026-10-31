@@ -59,7 +59,7 @@ T = {
   switch_label="English", switch_title="Switch to English", switch_lang="en",
   nav=["الرئيسية", "مسار الموظف", "طلب جديد", "الأسئلة", "الروابط", "التواصل"], navaria="التنقل الرئيسي", skip="تخطَّ إلى المحتوى",
   fcare="قسم العناية بالموظفين", fext="التحويلة 671",
-  fnote="حملة توعية داخلية لموظفي نطاق شقراء الصحي. هذا الموقع ليس موقعًا حكوميًا رسميًا؛ المرجع الرسمي هو الصحة القابضة والجهات المختصة.",
+  fnote="دليل توعوي لموظفي نطاق شقراء الصحي. المرجع الرسمي هو الصحة القابضة والجهات المختصة.",
   # ticket form
   tf_title="طلب جديد", tf_h1="عندي سؤال أو طلب", tf_p="ثلاث خطوات قصيرة. ستحصل على رقم تذكرة لمتابعة طلبك.",
   tf_urgent="لا تكتب كلمات مرور أو بيانات بنكية أو أرقام هوية. للأمور العاجلة اتصل بقسم العناية بالموظفين: التحويلة 671.",
@@ -75,7 +75,7 @@ T = {
   have_ticket="قدّمت طلبًا سابقًا؟", track_link="تابع حالة طلبك",
   # done
   dn_title="تم استلام طلبك", dn_h="تم استلام طلبك", dn_your="رقم تذكرتك:",
-  dn_keep="<b>احتفظ بهذا الرقم</b>؛ لا يظهر مرة أخرى ولا يُرسل بالبريد حاليًا. تتابع حالة طلبك بالرقم وبريدك الوزاري. قد يتواصل معك قسم العناية بالموظفين على بريدك الوزاري أو جوالك.",
+  dn_keep="<b>احتفظ بهذا الرقم</b>؛ لن يظهر مرة أخرى. تتابع حالة طلبك بالرقم وبريدك الوزاري. قد يتواصل معك قسم العناية بالموظفين على بريدك الوزاري أو جوالك.",
   dn_track="متابعة التذكرة", dn_home="الرئيسية", dn_none_h="لا توجد تذكرة لعرضها",
   dn_none_p="إن كنت قد أرسلت طلبًا للتو فاحتفظ برقم التذكرة الظاهر لك، أو أنشئ تذكرة جديدة.", dn_new="تذكرة جديدة",
   # status
@@ -99,7 +99,7 @@ T = {
   switch_label="العربية", switch_title="التبديل إلى العربية", switch_lang="ar",
   nav=["Home", "My journey", "New request", "FAQ", "Links", "Contact"], navaria="Main navigation", skip="Skip to content",
   fcare="Employee Care Department", fext="Ext. 671",
-  fnote="Internal awareness campaign for Shaqra Health Cluster staff. This is not an official government website; the official references are Health Holding and the responsible authorities.",
+  fnote="An awareness guide for Shaqra Health Cluster staff. The official references are Health Holding and the responsible authorities.",
   tf_title="New request", tf_h1="I have a question or request", tf_p="Three short steps. You will get a ticket number to track your request.",
   tf_urgent="Do not write passwords, bank details or ID numbers. For urgent matters call the Employee Care Department: extension 671.",
   steps=["Your request", "About you", "Contact & send"], step_word="Step", of="of",
@@ -113,7 +113,7 @@ T = {
   consent="I have read the privacy notice and agree that my data is used to handle my request",
   have_ticket="Already sent a request?", track_link="Track your request",
   dn_title="Request received", dn_h="We received your request", dn_your="Your ticket number:",
-  dn_keep="<b>Keep this number.</b> It will not be shown again and it is not sent by email at the moment. You track your request with this number and your ministry email. The Employee Care Department may contact you on your ministry email or mobile.",
+  dn_keep="<b>Keep this number.</b> It will not be shown again. You track your request with this number and your ministry email. The Employee Care Department may contact you on your ministry email or mobile.",
   dn_track="Track my ticket", dn_home="Home", dn_none_h="No ticket to show",
   dn_none_p="If you just sent a request, keep the ticket number shown to you, or create a new ticket.", dn_new="New ticket",
   st_title="Track my request", st_h1="Track my request", st_p="Enter your ticket number and the ministry email you used when you sent the request.",

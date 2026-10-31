@@ -1,0 +1,282 @@
+[
+ {
+  "cat": "start",
+  "org": "hhc",
+  "ar_title": "الأسئلة الشائعة لانتقال التجمعات الصحية",
+  "ar_desc": "الأسئلة والأجوبة الرسمية للصحة القابضة عن انتقال الموظفين.",
+  "ar_url": "https://www.health.sa/ar/faqs",
+  "en_title": "Health Holding – transition FAQ",
+  "en_desc": "Official questions and answers about moving employees.",
+  "en_url": null
+ },
+ {
+  "cat": "start",
+  "org": "hhc",
+  "ar_title": "الموقع الرسمي للصحة القابضة",
+  "ar_desc": "الصفحة الرئيسية للشركة وأخبارها وتجمعاتها الصحية.",
+  "ar_url": "https://www.health.sa/ar",
+  "en_title": "Health Holding – official website",
+  "en_desc": "Company home page, news and health clusters.",
+  "en_url": "https://www.health.sa/en"
+ },
+ {
+  "cat": "start",
+  "org": "hhc",
+  "ar_title": "تجمع الرياض الصحي الثالث على موقع الصحة القابضة",
+  "ar_desc": "صفحة تجمعنا في موقع الصحة القابضة.",
+  "ar_url": "https://www.health.sa/ar/clusters/riyadh_third_health_cluster_v2",
+  "en_title": "Riyadh Third Health Cluster on the Health Holding site",
+  "en_desc": "Our cluster's page on the Health Holding website.",
+  "en_url": "https://www.health.sa/en/clusters/riyadh_third_health_cluster_v2"
+ },
+ {
+  "cat": "start",
+  "org": "hhc",
+  "ar_title": "أخبار الصحة القابضة",
+  "ar_desc": "الأخبار والإعلانات المنشورة رسميًا من الشركة.",
+  "ar_url": "https://www.health.sa/ar/news",
+  "en_title": "Health Holding news",
+  "en_desc": "News and announcements published officially by the company.",
+  "en_url": "https://www.health.sa/en/news"
+ },
+ {
+  "cat": "start",
+  "org": "hhc",
+  "ar_title": "نموذج الرعاية الصحية السعودي",
+  "ar_desc": "تعريف الصحة القابضة بنموذج الرعاية الصحية وأدوار الجهات.",
+  "ar_url": "https://www.health.sa/ar/model-of-care",
+  "en_title": "The Saudi Model of Care",
+  "en_desc": "Health Holding's explanation of the model of care and the roles of each body.",
+  "en_url": "https://www.health.sa/en/model-of-care"
+ },
+ {
+  "cat": "start",
+  "org": "hhc",
+  "ar_title": "تواصل معنا (الصحة القابضة)",
+  "ar_desc": "صفحة التواصل العامة في موقع الصحة القابضة.",
+  "ar_url": "https://www.health.sa/ar/contact-us",
+  "en_title": "Contact Health Holding",
+  "en_desc": "The general contact page on the Health Holding website.",
+  "en_url": "https://www.health.sa/en/contact-us"
+ },
+ {
+  "cat": "start",
+  "org": "r3",
+  "ar_title": "الموقع الرسمي لتجمع الرياض الصحي الثالث",
+  "ar_desc": "موقع التجمع الرسمي ومنشآته.",
+  "ar_url": "https://www.r3-health.net/ar/",
+  "en_title": "Riyadh Third Health Cluster – official website",
+  "en_desc": "The cluster's official site and its facilities.",
+  "en_url": null
+ },
+ {
+  "cat": "start",
+  "org": "moh",
+  "ar_title": "أسئلة وزارة الصحة: قواعد وترتيبات خاصة بالموظفين",
+  "ar_desc": "القواعد والترتيبات المبنية على قرار مجلس الوزراء رقم 616 لمعاملة الموظفين.",
+  "ar_url": "https://www.moh.gov.sa/Support/FAQ/Pages/faq20.aspx",
+  "en_title": "Ministry of Health FAQ: rules and arrangements for employees",
+  "en_desc": "Rules and arrangements based on Council of Ministers decision No. 616.",
+  "en_url": "https://www.moh.gov.sa/en/support/faq/pages/faq20.aspx"
+ },
+ {
+  "cat": "contract",
+  "org": "qiwa",
+  "ar_title": "منصة قوى",
+  "ar_desc": "المنصة التي تراجع فيها عقدك الوظيفي بعد وصول رسالة «قوى».",
+  "ar_url": "https://www.qiwa.sa/ar",
+  "en_title": "Qiwa platform",
+  "en_desc": "Where you review your employment contract after the Qiwa message.",
+  "en_url": "https://www.qiwa.sa/en"
+ },
+ {
+  "cat": "contract",
+  "org": "hrsd",
+  "ar_title": "خدمة توثيق العقود",
+  "ar_desc": "صفحة الوزارة لخدمة توثيق العقود، وفيها أسئلة شائعة عن بداية العقد وحساب فترة الخدمة السابقة.",
+  "ar_url": "https://www.hrsd.gov.sa/ministry-services/services/%D8%A5%D8%AF%D8%A7%D8%B1%D8%A9-%D8%A7%D9%84%D8%B9%D9%82%D9%88%D8%AF",
+  "en_title": "Contract documentation service",
+  "en_desc": "The Ministry page for contract documentation, with common questions on the contract start date and previous service.",
+  "en_url": "https://www.hrsd.gov.sa/en/ministry-services/services/%D8%A5%D8%AF%D8%A7%D8%B1%D8%A9-%D8%A7%D9%84%D8%B9%D9%82%D9%88%D8%AF"
+ },
+ {
+  "cat": "contract",
+  "org": "hrsd",
+  "ar_title": "نظام العمل: علاقات العمل",
+  "ar_desc": "مواد نظام العمل المتعلقة بعلاقات العمل وعقد العمل.",
+  "ar_url": "https://www.hrsd.gov.sa/%D8%B9%D9%84%D8%A7%D9%82%D8%A7%D8%AA-%D8%A7%D9%84%D8%B9%D9%85%D9%84",
+  "en_title": "Labor Law: labor relations",
+  "en_desc": "Labor Law articles on labor relations and the employment contract.",
+  "en_url": "https://www.hrsd.gov.sa/en/%D8%B9%D9%84%D8%A7%D9%82%D8%A7%D8%AA-%D8%A7%D9%84%D8%B9%D9%85%D9%84"
+ },
+ {
+  "cat": "contract",
+  "org": "hrsd",
+  "ar_title": "صفحة المستفيد: الشكاوى والطلبات والبلاغات",
+  "ar_desc": "قناة وزارة الموارد البشرية الرسمية لتقديم الشكاوى والطلبات والبلاغات.",
+  "ar_url": "https://www.hrsd.gov.sa/ministry-services/services/client-page",
+  "en_title": "HRSD client page: complaints, requests and reports",
+  "en_desc": "The Ministry's official channel for complaints, requests and reports.",
+  "en_url": "https://www.hrsd.gov.sa/en/ministry-services/services/client-page"
+ },
+ {
+  "cat": "contract",
+  "org": "hrsd",
+  "ar_title": "خدمات الأفراد في وزارة الموارد البشرية",
+  "ar_desc": "صفحة خدمات الوزارة الموجهة للأفراد.",
+  "ar_url": "https://www.hrsd.gov.sa/individuals",
+  "en_title": "HRSD services for individuals",
+  "en_desc": "The Ministry's services page for individuals.",
+  "en_url": "https://www.hrsd.gov.sa/en/individuals"
+ },
+ {
+  "cat": "salary",
+  "org": "gov",
+  "ar_title": "إصدار شهادة الاشتراك (الأجر الخاضع للاشتراك)",
+  "ar_desc": "خدمة إلكترونية من التأمينات الاجتماعية تصدر شهادة توضح الأجر الخاضع للاشتراك.",
+  "ar_url": "https://my.gov.sa/ar/services/20435",
+  "en_title": "Wage certificate (contributory wage) – GOSI service",
+  "en_desc": "Electronic service that issues a certificate of the wage subject to GOSI contributions.",
+  "en_url": "https://my.gov.sa/en/services/20435"
+ },
+ {
+  "cat": "salary",
+  "org": "hrsd",
+  "ar_title": "برنامج حماية الأجور",
+  "ar_desc": "تعريف رسمي بنظام حماية الأجور ونسبة التزام المنشآت بصرف الأجور.",
+  "ar_url": "https://www.hrsd.gov.sa/knowledge-centre/initiatives/national-transformation-initiatives-bank/108808",
+  "en_title": "Wage Protection Program",
+  "en_desc": "Official description of wage protection. It covers private-sector workers, Saudi and expatriate.",
+  "en_url": "https://www.hrsd.gov.sa/en/knowledge-centre/initiatives/national-transformation-initiatives-bank/108808"
+ },
+ {
+  "cat": "salary",
+  "org": "hrsd",
+  "ar_title": "نظام العمل: شروط العمل وظروفه",
+  "ar_desc": "مواد نظام العمل عن ساعات العمل والأجر عن ساعات العمل الإضافية.",
+  "ar_url": "https://www.hrsd.gov.sa/%D8%B4%D8%B1%D9%88%D8%B7-%D8%A7%D9%84%D8%B9%D9%85%D9%84-%D9%88%D8%B8%D8%B1%D9%88%D9%81%D9%87",
+  "en_title": "Labor Law: working conditions",
+  "en_desc": "Labor Law articles on working hours and overtime pay.",
+  "en_url": null
+ },
+ {
+  "cat": "eos",
+  "org": "hrsd",
+  "ar_title": "الحقوق عند انتهاء عقد العمل",
+  "ar_desc": "شرح الوزارة لاستحقاق مكافأة نهاية الخدمة وطريقة احتسابها وفق نظام العمل.",
+  "ar_url": "https://www.hrsd.gov.sa/media-center/media/lerightseocontract",
+  "en_title": "Rights at the end of an employment contract",
+  "en_desc": "The Ministry's explanation of the end-of-service benefit and how it is calculated under the Labor Law.",
+  "en_url": "https://www.hrsd.gov.sa/en/media-center/media/lerightseocontract"
+ },
+ {
+  "cat": "eos",
+  "org": "hrsd",
+  "ar_title": "نهاية الخدمة",
+  "ar_desc": "صفحة الوزارة عن طريقة احتساب المكافأة وموعد استحقاقها.",
+  "ar_url": "https://www.hrsd.gov.sa/media-center/media/leendofservice",
+  "en_title": "End of service",
+  "en_desc": "The Ministry's page on how and when the benefit is calculated and due.",
+  "en_url": "https://www.hrsd.gov.sa/en/media-center/media/leendofservice"
+ },
+ {
+  "cat": "eos",
+  "org": "qiwa",
+  "ar_title": "كيف تحسب مكافأة نهاية الخدمة (قوى)",
+  "ar_desc": "صفحة منصة قوى لشرح حساب مكافأة نهاية الخدمة من حساب الموظف.",
+  "ar_url": null,
+  "en_title": "How to calculate your end-of-service benefits (Qiwa)",
+  "en_desc": "Qiwa page explaining how the benefit is calculated from your account.",
+  "en_url": "https://qiwa.sa/en/employees/manage-your-current-job/how-calculate-your-end-service-benefits"
+ },
+ {
+  "cat": "eos",
+  "org": "hrsd",
+  "ar_title": "نظام العمل: شروط العمل وظروفه (ومنها الإجازة السنوية)",
+  "ar_desc": "مواد نظام العمل عن الإجازة السنوية وساعات العمل.",
+  "ar_url": "https://www.hrsd.gov.sa/%D8%B4%D8%B1%D9%88%D8%B7-%D8%A7%D9%84%D8%B9%D9%85%D9%84-%D9%88%D8%B8%D8%B1%D9%88%D9%81%D9%87",
+  "en_title": "Labor Law: working conditions (includes annual leave)",
+  "en_desc": "Labor Law articles on annual leave and working hours.",
+  "en_url": null
+ },
+ {
+  "cat": "ins",
+  "org": "gosi",
+  "ar_title": "التأمينات الاجتماعية: الموقع الرسمي",
+  "ar_desc": "بوابة المؤسسة العامة للتأمينات الاجتماعية.",
+  "ar_url": "https://www.gosi.gov.sa",
+  "en_title": "GOSI – official website",
+  "en_desc": "The General Organization for Social Insurance portal.",
+  "en_url": "https://www.gosi.gov.sa/en"
+ },
+ {
+  "cat": "ins",
+  "org": "gosi",
+  "ar_title": "الأسئلة الشائعة حول قرار تعديل نظام تبادل المنافع",
+  "ar_desc": "أسئلة شائعة رسمية عن قرار تعديل نظام تبادل المنافع بين أنظمة التقاعد والتأمينات.",
+  "ar_url": "https://www.gosi.gov.sa/GOSIOnline/benefitexchange_faq",
+  "en_title": "GOSI FAQ: amendment of the benefit-exchange system",
+  "en_desc": "Official FAQ on the decision amending the exchange of benefits between retirement and insurance systems (pension systems).",
+  "en_url": "https://www.gosi.gov.sa/GOSIOnline/benefitexchange_faq?locale=en_US"
+ },
+ {
+  "cat": "ins",
+  "org": "gosi",
+  "ar_title": "خدمات المتقاعدين في التأمينات الاجتماعية",
+  "ar_desc": "خدمات المعاش التقاعدي وشروط التقاعد المبكر في التأمينات.",
+  "ar_url": "https://www.gosi.gov.sa/GOSIOnline/Services_for_Retired",
+  "en_title": "GOSI services for retirees",
+  "en_desc": "Pension services and early-retirement conditions.",
+  "en_url": null
+ },
+ {
+  "cat": "plat",
+  "org": "qiwa",
+  "ar_title": "منصة قوى (للأفراد)",
+  "ar_desc": "مراجعة العقود الوظيفية وخدمات الموظف.",
+  "ar_url": "https://www.qiwa.sa",
+  "en_title": "Qiwa platform (for individuals)",
+  "en_desc": "Review employment contracts and employee services.",
+  "en_url": "https://www.qiwa.sa/en"
+ },
+ {
+  "cat": "plat",
+  "org": "gov",
+  "ar_title": "المنصة الوطنية الموحدة",
+  "ar_desc": "بوابة الخدمات الحكومية الموحدة وخدماتها الإلكترونية.",
+  "ar_url": "https://my.gov.sa/ar",
+  "en_title": "National Platform (my.gov.sa)",
+  "en_desc": "The unified government services portal.",
+  "en_url": "https://my.gov.sa/en"
+ },
+ {
+  "cat": "plat",
+  "org": "hrsd",
+  "ar_title": "الخدمات الإلكترونية لوزارة الموارد البشرية",
+  "ar_desc": "بوابة الخدمات الإلكترونية للوزارة.",
+  "ar_url": "https://eservices.hrsd.gov.sa/index.html",
+  "en_title": "HRSD e-services",
+  "en_desc": "The Ministry's electronic services portal.",
+  "en_url": null
+ },
+ {
+  "cat": "plat",
+  "org": "moh",
+  "ar_title": "موارد: بوابة موظفي وزارة الصحة",
+  "ar_desc": "صفحة دخول بوابة موارد لموظفي وزارة الصحة.",
+  "ar_url": "https://mawared.moh.gov.sa/",
+  "en_title": "Mawared: Ministry of Health employee portal",
+  "en_desc": "Login page of the Mawared portal for Ministry of Health employees.",
+  "en_url": null
+ },
+ {
+  "cat": "ins",
+  "org": "gosi",
+  "ar_title": "التأمينات: من يشمله النظام ومتى يبدأ الاشتراك",
+  "ar_desc": "صفحة التسجيل الرسمية: فرع المعاشات للسعوديين فقط، وفرع الأخطار المهنية على جميع العاملين دون تمييز في الجنسية.",
+  "ar_url": "https://www.gosi.gov.sa/GOSIOnline/Registration",
+  "en_title": "GOSI: who is covered and how registration works",
+  "en_desc": "Official registration page: the pension (annuities) branch covers Saudis only; the occupational-hazards branch covers all workers regardless of nationality.",
+  "en_url": "https://www.gosi.gov.sa/GOSIOnline/Registration?locale=en_US"
+ }
+]

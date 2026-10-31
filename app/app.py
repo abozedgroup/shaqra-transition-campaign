@@ -627,7 +627,7 @@ def admin_export():
 # ---------------------------------------------------------------- static site
 STATIC_PAGES = {"index.html", "faq.html", "contact.html", "links.html", "journey.html",
                 "en/index.html", "en/faq.html", "en/contact.html", "en/links.html", "en/journey.html"}
-STATIC_DIRS = {"assets", "infographics", "kb"}
+STATIC_DIRS = {"assets", "infographics"}
 
 
 @app.route("/health")

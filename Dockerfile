@@ -16,7 +16,6 @@ COPY index.html faq.html contact.html links.html journey.html /srv/site/
 COPY en/ /srv/site/en/
 COPY assets/ /srv/site/assets/
 COPY infographics/ /srv/site/infographics/
-COPY kb/faq-approved.json kb/faq-approved.md /srv/site/kb/
 
 RUN useradd --system --uid 10001 --no-create-home app \
     && mkdir -p /data \
