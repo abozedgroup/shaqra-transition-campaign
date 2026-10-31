@@ -15,6 +15,8 @@ import time
 import unicodedata
 from datetime import datetime, timedelta, timezone
 
+from i18n import (ERR, FACILITY_OPTS, JOB_OPTS, STATUSES as STATUSES_I18N, T, TYPES as TYPES_I18N,
+                  TYPE_HELP)
 from flask import (Flask, Response, abort, g, redirect, render_template,
                    request, send_from_directory, session, url_for)
 
@@ -112,6 +114,9 @@ def init_db():
     con = sqlite3.connect(DB_PATH)
     con.execute("PRAGMA journal_mode=WAL")
     con.executescript(SCHEMA)
+    cols = [r[1] for r in con.execute("PRAGMA table_info(tickets)")]
+    if "lang" not in cols:
+        con.execute("ALTER TABLE tickets ADD COLUMN lang TEXT NOT NULL DEFAULT 'ar'")
     con.commit()
     con.close()
     try:
@@ -236,39 +241,59 @@ def headers(resp):
 @app.before_request
 def mark():
     p = request.path
-    g.is_app = p.startswith(("/ticket", "/status", "/admin", "/app-static"))
+    g.is_app = p.startswith(("/ticket", "/status", "/admin", "/app-static", "/en/ticket", "/en/status"))
+    g.lang = "en" if (p == "/en" or p.startswith("/en/")) else "ar"
+
+
+def _msg(code, status):
+    g.is_app = True
+    lang = getattr(g, "lang", "ar")
+    title, msg = T[lang][code]
+    return render_template("msg.html", title=title, msg=msg), status
 
 
 @app.errorhandler(400)
 def e400(_e):
-    g.is_app = True
-    return render_template("msg.html", title="طلب غير صالح",
-                           msg="انتهت صلاحية الصفحة أو الطلب غير صالح. ارجع للصفحة السابقة وحدّثها ثم أعد المحاولة."), 400
+    return _msg("e400", 400)
 
 
 @app.errorhandler(404)
 def e404(_e):
-    g.is_app = True
-    return render_template("msg.html", title="الصفحة غير موجودة", msg="لم نجد الصفحة المطلوبة."), 404
+    return _msg("e404", 404)
 
 
 @app.errorhandler(413)
 def e413(_e):
-    g.is_app = True
-    return render_template("msg.html", title="الطلب كبير", msg="حجم الطلب أكبر من المسموح."), 413
+    return _msg("e413", 413)
 
 
 @app.errorhandler(429)
 def e429(_e):
-    g.is_app = True
-    return render_template("msg.html", title="محاولات كثيرة",
-                           msg="تجاوزت عدد المحاولات المسموح. انتظر بضع دقائق ثم أعد المحاولة."), 429
+    return _msg("e429", 429)
 
 
 @app.errorhandler(500)
 def e500(_e):
-    g.is_app = True
-    return render_template("msg.html", title="خطأ", msg="حدث خطأ غير متوقع. حاول لاحقًا أو راسل قسم العناية بالموظفين مباشرة."), 500
+    return _msg("e500", 500)
+
+
+@app.context_processor
+def inject_i18n():
+    lang = getattr(g, "lang", "ar")
+    pre = "/en" if lang == "en" else ""
+    p = request.path
+    # counterpart page in the other language (app pages keep their path, static pages map by name)
+    if p.startswith("/en"):
+        other = p[3:] or "/"
+    else:
+        other = "/en" + (p if p != "/" else "/")
+    if other.rstrip("/").endswith("/ticket/done") or p.rstrip("/").endswith("/ticket/done"):
+        other = ("/ticket" if lang == "en" else "/en/ticket")
+    if p.startswith("/admin") or p.startswith("/en/admin"):
+        other = None
+    return dict(t=T[lang], lang=lang, dir=T[lang]["dir"], pre=pre, switch_url=other,
+                u=dict(home=pre + "/", faq=pre + "/faq.html", links=pre + "/links.html", contact=pre + "/contact.html",
+                       ticket=pre + "/ticket", status=pre + "/status", done=pre + "/ticket/done"))
 
 
 # ---------------------------------------------------------------- validation
@@ -278,34 +303,48 @@ def clean(s, maxlen):
     return s.strip()[:maxlen]
 
 
-def validate_ticket(form):
+def _opt(opts, raw, lang):
+    """Accept the option key (new form) or the stored Arabic label (older clients); return the Arabic label."""
+    for key, ar, en in opts:
+        if raw in (key, ar):
+            return ar
+    return ""
+
+
+def validate_ticket(form, lang="ar"):
+    i = 0 if lang == "ar" else 1
     errors, v = {}, {}
     v["email"] = clean(form.get("email"), 120).lower()
     if not EMAIL_RE.match(v["email"]):
-        errors["email"] = "البريد يجب أن يكون وزاريًا وينتهي بـ moh.gov.sa"
+        errors["email"] = ERR["email"][i]
     v["mobile"] = clean(form.get("mobile"), 20).translate(AR_DIGITS).replace(" ", "")
     if not MOBILE_RE.match(v["mobile"]):
-        errors["mobile"] = "رقم الجوال يجب أن يكون سعوديًا بصيغة 05XXXXXXXX"
+        errors["mobile"] = ERR["mobile"][i]
     v["emp_no"] = clean(form.get("emp_no"), 20).translate(AR_DIGITS).replace(" ", "")
     if not EMPNO_RE.match(v["emp_no"]):
-        errors["emp_no"] = "الرقم الوظيفي أرقام فقط (من 3 إلى 10 خانات)"
+        errors["emp_no"] = ERR["emp_no"][i]
     v["name"] = clean(form.get("name"), 80)
     if len(v["name"]) < 3 or "\n" in v["name"]:
-        errors["name"] = "اكتب الاسم (3 أحرف على الأقل)"
-    v["facility"] = clean(form.get("facility"), 80)
-    if v["facility"] not in FACILITIES:
-        errors["facility"] = "اختر المنشأة"
-    v["job_cat"] = clean(form.get("job_cat"), 80)
-    if v["job_cat"] not in JOB_CATEGORIES:
-        errors["job_cat"] = "اختر الفئة الوظيفية"
+        errors["name"] = ERR["name"][i]
+    raw_f = clean(form.get("facility"), 80)
+    v["facility"] = _opt(FACILITY_OPTS, raw_f, lang)
+    if not v["facility"]:
+        errors["facility"] = ERR["facility"][i]
+    raw_j = clean(form.get("job_cat"), 80)
+    v["job_cat"] = _opt(JOB_OPTS, raw_j, lang)
+    if not v["job_cat"]:
+        errors["job_cat"] = ERR["job_cat"][i]
     v["req_type"] = clean(form.get("req_type"), 20)
     if v["req_type"] not in REQ_TYPES:
-        errors["req_type"] = "اختر نوع الطلب"
+        errors["req_type"] = ERR["req_type"][i]
     v["message"] = clean(form.get("message"), 3000)
     if len(v["message"]) < 10:
-        errors["message"] = "اكتب نص الطلب (10 أحرف على الأقل)"
+        errors["message"] = ERR["message"][i]
     if form.get("consent") != "1":
-        errors["consent"] = "الموافقة على إشعار الخصوصية مطلوبة"
+        errors["consent"] = ERR["consent"][i]
+    # keep what the user typed for re-display (keys for the selects)
+    v["facility_key"] = next((k for k, ar, en in FACILITY_OPTS if raw_f in (k, ar)), "")
+    v["job_key"] = next((k for k, ar, en in JOB_OPTS if raw_j in (k, ar)), "")
     return v, errors
 
 
@@ -320,7 +359,10 @@ def new_ref(con):
 
 # ---------------------------------------------------------------- public pages
 @app.route("/ticket", methods=["GET", "POST"])
+@app.route("/en/ticket", methods=["GET", "POST"])
 def ticket_form():
+    lang = g.lang
+    pre = "/en" if lang == "en" else ""
     values, errors = {}, {}
     if request.method == "POST":
         check_csrf()
@@ -328,8 +370,8 @@ def ticket_form():
         if rate_hit("tc:" + ip, 15, 600) or rate_hit("td:" + ip, 300, 86400):
             abort(429)
         if request.form.get("website"):  # honeypot
-            return redirect(url_for("ticket_done"))
-        values, errors = validate_ticket(request.form)
+            return redirect(pre + "/ticket/done")
+        values, errors = validate_ticket(request.form, lang)
         if not errors:
             con = db()
             since = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -340,29 +382,49 @@ def ticket_form():
             ref = new_ref(con)
             ts = now_utc()
             con.execute(
-                "INSERT INTO tickets(ref,created_at,updated_at,email,mobile,emp_no,name,facility,job_cat,req_type,message)"
-                " VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+                "INSERT INTO tickets(ref,created_at,updated_at,email,mobile,emp_no,name,facility,job_cat,req_type,message,lang)"
+                " VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
                 (ref, ts, ts, values["email"], values["mobile"], values["emp_no"], values["name"],
-                 values["facility"], values["job_cat"], values["req_type"], values["message"]))
+                 values["facility"], values["job_cat"], values["req_type"], values["message"], lang))
             con.commit()
             session["done_ref"] = ref
-            return redirect(url_for("ticket_done"))
+            return redirect(pre + "/ticket/done")
     else:
         t = request.args.get("type", "")
         if t in REQ_TYPES:
             values["req_type"] = t
-    return render_template("ticket_form.html", v=values, errors=errors, facilities=FACILITIES,
-                           jobs=JOB_CATEGORIES, types=REQ_TYPES), (400 if errors else 200)
+        qpre = clean(request.args.get("q"), 300)
+        if qpre:
+            values["message"] = qpre
+    i = 0 if lang == "ar" else 1
+    first_bad = ""
+    for fld in ("req_type", "message", "name", "emp_no", "facility", "job_cat", "email", "mobile", "consent"):
+        if fld in errors:
+            first_bad = fld
+            break
+    start = 1 if first_bad in ("", "req_type", "message") else (2 if first_bad in ("name", "emp_no", "facility", "job_cat") else 3)
+    return render_template(
+        "ticket_form.html", v=values, errors=errors, start=start,
+        facilities=[(k, ar if lang == "ar" else en) for k, ar, en in FACILITY_OPTS],
+        jobs=[(k, ar if lang == "ar" else en) for k, ar, en in JOB_OPTS],
+        types=[(k, TYPES_I18N[k][i], TYPE_HELP[k][i]) for k in REQ_TYPES],
+        err_msgs={k: ERR[k][i] for k in ERR},
+        err_order=["req_type", "message", "name", "emp_no", "facility", "job_cat", "email", "mobile", "consent"],
+    ), (400 if errors else 200)
 
 
 @app.route("/ticket/done")
+@app.route("/en/ticket/done")
 def ticket_done():
     ref = session.pop("done_ref", None)
     return render_template("ticket_done.html", ref=ref)
 
 
 @app.route("/status", methods=["GET", "POST"])
+@app.route("/en/status", methods=["GET", "POST"])
 def status_lookup():
+    lang = g.lang
+    i = 0 if lang == "ar" else 1
     result, error = None, None
     if request.method == "POST":
         check_csrf()
@@ -380,8 +442,10 @@ def status_lookup():
             result = row
         else:
             time.sleep(0.4)
-            error = "لا توجد تذكرة مطابقة. تأكد من رقم التذكرة والبريد الوزاري المستخدم عند التقديم."
-    return render_template("status.html", result=result, error=error, statuses=STATUSES, types=REQ_TYPES)
+            error = T[lang]["st_notfound"]
+    return render_template("status.html", result=result, error=error,
+                           statuses={k: v[i] for k, v in STATUSES_I18N.items()},
+                           types={k: v[i] for k, v in TYPES_I18N.items()})
 
 
 @app.route("/app-static/<path:name>")
@@ -518,7 +582,7 @@ def admin_ticket(ref):
         con.commit()
         row = con.execute("SELECT * FROM tickets WHERE ref=?", (ref,)).fetchone()
         saved = True
-    return render_template("admin_ticket.html", t=row, statuses=STATUSES, types=REQ_TYPES, saved=saved)
+    return render_template("admin_ticket.html", tk=row, statuses=STATUSES, types=REQ_TYPES, saved=saved)
 
 
 @app.route("/admin/t/<ref>/delete", methods=["POST"])
@@ -548,12 +612,12 @@ def admin_export():
     buf = io.StringIO()
     w = csv.writer(buf)
     w.writerow(["رقم التذكرة", "تاريخ الإنشاء (توقيت الرياض)", "آخر تحديث", "الحالة", "نوع الطلب", "الاسم",
-                "الرقم الوظيفي", "البريد", "الجوال", "المنشأة", "الفئة الوظيفية", "النص", "الرد", "ملاحظة داخلية"])
+                "الرقم الوظيفي", "البريد", "الجوال", "المنشأة", "الفئة الوظيفية", "النص", "الرد", "ملاحظة داخلية", "لغة التقديم"])
     for r in rows:
         w.writerow([_csv_safe(x) for x in (
             r["ref"], fmt_dt(r["created_at"]), fmt_dt(r["updated_at"]), STATUSES.get(r["status"], r["status"]),
             REQ_TYPES.get(r["req_type"], r["req_type"]), r["name"], r["emp_no"], r["email"], r["mobile"],
-            r["facility"], r["job_cat"], r["message"], r["reply"], r["note"])])
+            r["facility"], r["job_cat"], r["message"], r["reply"], r["note"], r["lang"])])
     out = "\ufeff" + buf.getvalue()
     name = "tickets-%s.csv" % datetime.now(RIYADH).strftime("%Y%m%d-%H%M")
     return Response(out, mimetype="text/csv; charset=utf-8",
@@ -561,7 +625,8 @@ def admin_export():
 
 
 # ---------------------------------------------------------------- static site
-STATIC_PAGES = {"index.html", "faq.html", "contact.html"}
+STATIC_PAGES = {"index.html", "faq.html", "contact.html", "links.html",
+                "en/index.html", "en/faq.html", "en/contact.html", "en/links.html"}
 STATIC_DIRS = {"assets", "infographics", "kb"}
 
 
@@ -573,6 +638,10 @@ def health():
 @app.route("/", defaults={"p": "index.html"})
 @app.route("/<path:p>")
 def static_site(p):
+    if p == "en":
+        return redirect("/en/", 308)
+    if p == "en/":
+        p = "en/index.html"
     top = p.split("/", 1)[0]
     if p in STATIC_PAGES or (top in STATIC_DIRS and "/" in p):
         return send_from_directory(SITE_DIR, p, max_age=300)

@@ -1,17 +1,19 @@
 {% extends "base.html" %}
-{% block title %}تم استلام طلبك{% endblock %}
+{% set nav = 'ticket' %}
+{% block title %}{{ t.dn_title }}{% endblock %}
 {% block body %}
-<section><div class="wrap">
+<section class="s"><div class="wrap narrow">
 {% if ref %}
-  <div class="result show" style="display:block">
-    <h3>تم استلام طلبك</h3>
-    <p>رقم تذكرتك:</p>
+  <div class="result show">
+    <h1 class="h1s ok-h">{{ t.dn_h }}</h1>
+    <p>{{ t.dn_your }}</p>
     <p><span class="ref">{{ ref }}</span></p>
-    <p><b>احتفظ بهذا الرقم</b>؛ لا يظهر مرة أخرى. تتابع حالة طلبك من <a href="/status">صفحة المتابعة</a> برقم التذكرة وبريدك الوزاري. سيتواصل معك قسم العناية بالموظفين عبر بريدك الوزاري أو رقم جوالك عند الحاجة.</p>
-    <p><a class="btn solid" href="/status">متابعة التذكرة</a> <a class="btn" href="/">الرئيسية</a></p>
+    <p>{{ t.dn_keep|safe }}</p>
+    <p class="btns"><a class="btn solid" href="{{ u.status }}">{{ t.dn_track }}</a> <a class="btn" href="{{ u.home }}">{{ t.dn_home }}</a></p>
   </div>
 {% else %}
-  <div class="formcard"><h1 class="h1s">لا توجد تذكرة لعرضها</h1><p>إن كنت قد أرسلت طلبًا للتو فاحتفظ برقم التذكرة الظاهر لك، أو <a href="/ticket">أنشئ تذكرة جديدة</a>.</p></div>
+  <div class="formcard"><h1 class="h1s">{{ t.dn_none_h }}</h1><p>{{ t.dn_none_p }}</p>
+  <p><a class="btn solid" href="{{ u.ticket }}">{{ t.dn_new }}</a></p></div>
 {% endif %}
 </div></section>
 {% endblock %}

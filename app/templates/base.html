@@ -1,39 +1,44 @@
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="{{ t.lang }}" dir="{{ t.dir }}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
-<title>{% block title %}{% endblock %} | نطاق شقراء الصحي</title>
+<title>{% block title %}{% endblock %} | {{ t.sitename }}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+<link rel="icon" href="data:,">
 <link rel="stylesheet" href="/assets/site.css">
 <link rel="stylesheet" href="/app-static/app.css">
+<script src="/assets/site.js"></script>
 </head>
 <body>
+<a class="skip" href="#main">{{ t.skip }}</a>
 <header class="top">
-  <div class="wrap">
-    <a class="brand" href="/" aria-label="نطاق شقراء الصحي – تجمع الرياض الصحي الثالث">
-      <img src="/assets/health-holding-logo-color.svg" alt="شعار الصحة القابضة – Health Holding">
+  <div class="wrap top-row">
+    <a class="brand" href="{{ u.home }}" aria-label="{{ t.sitename }} – {{ t.sub }}">
+      <img src="/assets/health-holding-logo-color.svg" alt="{{ t.logoalt }}">
       <span class="sep" aria-hidden="true"></span>
-      <span class="name">نطاق شقراء الصحي<small>تجمع الرياض الصحي الثالث</small></span>
+      <span class="name">{{ t.sitename }}<small>{{ t.sub }}</small></span>
     </a>
-    <nav aria-label="التنقل">
-      <a href="/#guide">دليل الموظف</a>
-      <a href="/faq.html">الأسئلة الشائعة</a>
-      <a href="/contact.html">التواصل مع العناية بالموظفين</a>
-      <a href="/ticket" {% if nav=='ticket' %}class="cur"{% endif %}>تذكرة جديدة</a>
-      <a href="/status" {% if nav=='status' %}class="cur"{% endif %}>متابعة تذكرة</a>
-    </nav>
+    {% if switch_url %}<a class="lang" href="{{ switch_url }}" hreflang="{{ t.switch_lang }}" lang="{{ t.switch_lang }}" title="{{ t.switch_title }}">{{ t.switch_label }}</a>{% endif %}
   </div>
+  <div class="wrap"><nav class="main" aria-label="{{ t.navaria }}">
+    <a href="{{ u.home }}">{{ t.nav[0] }}</a>
+    <a href="{{ u.ticket }}" {% if nav in ('ticket','status') %}class="cur" aria-current="page"{% endif %}>{{ t.nav[1] }}</a>
+    <a href="{{ u.faq }}">{{ t.nav[2] }}</a>
+    <a href="{{ u.links }}">{{ t.nav[3] }}</a>
+    <a href="{{ u.contact }}">{{ t.nav[4] }}</a>
+  </nav></div>
 </header>
-<main>
+<main id="main">
 {% block body %}{% endblock %}
 </main>
 <footer>
   <div class="wrap">
-    <b>نطاق شقراء الصحي – تجمع الرياض الصحي الثالث · حملة توعية داخلية</b>
-    <div class="fc"><b>قسم العناية بالموظفين:</b> <a href="mailto:R3-shqra-hrcs@moh.gov.sa">R3-shqra-hrcs@moh.gov.sa</a> · التحويلة 671</div>
+    <b>{{ t.sitename }} – {{ t.sub }}</b>
+    <p class="fnote">{{ t.fnote }}</p>
+    <div class="fc"><b>{{ t.fcare }}:</b> <a href="mailto:R3-shqra-hrcs@moh.gov.sa" class="ltr">R3-shqra-hrcs@moh.gov.sa</a> · {{ t.fext }}</div>
   </div>
 </footer>
 {% block scripts %}{% endblock %}

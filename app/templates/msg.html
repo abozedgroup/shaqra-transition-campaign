@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block title %}{{ title }}{% endblock %}
 {% block body %}
-<section><div class="wrap"><div class="formcard"><h1 class="h1s">{{ title }}</h1><p>{{ msg }}</p>
-<p><a class="btn solid" href="/">الرئيسية</a></p></div></div></section>
+<section class="s"><div class="wrap narrow"><div class="formcard"><h1 class="h1s">{{ title }}</h1><p>{{ msg }}</p>
+<p><a class="btn solid" href="{{ u.home }}">{{ t.home }}</a></p></div></div></section>
 {% endblock %}

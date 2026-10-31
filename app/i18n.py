@@ -1,0 +1,133 @@
+# -*- coding: utf-8 -*-
+"""Bilingual (Arabic / English) strings for the public app pages. Admin pages stay Arabic."""
+
+# (key, Arabic label stored in the DB, English label shown to English users)
+FACILITY_OPTS = [
+    ("shaqra_hospital", "مستشفى شقراء العام", "Shaqra General Hospital"),
+    ("thadiq_hospital", "مستشفى ثادق", "Thadiq Hospital"),
+    ("marat_hospital", "مستشفى مرات", "Marat Hospital"),
+    ("phc_shaqra", "مراكز الرعاية الأولية – شقراء", "Primary care centers – Shaqra"),
+    ("phc_thadiq", "مراكز الرعاية الأولية – ثادق", "Primary care centers – Thadiq"),
+    ("phc_marat", "مراكز الرعاية الأولية – مرات", "Primary care centers – Marat"),
+    ("other", "أخرى", "Other"),
+]
+JOB_OPTS = [
+    ("physician", "طبيب", "Physician"),
+    ("nursing", "تمريض", "Nursing"),
+    ("pharmacy", "صيدلة", "Pharmacy"),
+    ("allied", "مختبر وأشعة وفنيون صحيون", "Laboratory, radiology and allied health"),
+    ("admin", "إداري", "Administrative"),
+    ("support", "خدمات مساندة", "Support services"),
+    ("it", "تقنية معلومات", "Information technology"),
+    ("other", "أخرى", "Other"),
+]
+TYPES = {
+    "inquiry": ("استفسار", "Inquiry"),
+    "complaint": ("شكوى", "Complaint"),
+    "suggestion": ("اقتراح", "Suggestion"),
+    "info_request": ("طلب معلومات", "Information request"),
+}
+TYPE_HELP = {
+    "inquiry": ("سؤال عن إجراء أو حالتك", "A question about a procedure or your case"),
+    "complaint": ("ملاحظة تحتاج متابعة", "A problem that needs follow-up"),
+    "suggestion": ("فكرة للتحسين", "An idea to improve things"),
+    "info_request": ("طلب بيان أو معلومة", "Request for a statement or information"),
+}
+STATUSES = {
+    "new": ("جديدة", "New"),
+    "in_progress": ("قيد المعالجة", "In progress"),
+    "closed": ("مغلقة", "Closed"),
+}
+
+ERR = {
+    "email": ("اكتب بريدك الوزاري المنتهي بـ moh.gov.sa (مثال: name@moh.gov.sa).",
+              "Enter your ministry email ending in @moh.gov.sa (for example name@moh.gov.sa). Other email addresses are not accepted."),
+    "mobile": ("اكتب رقم جوال من 10 أرقام يبدأ بـ 05 (مثال: 0512345678).",
+               "Enter a mobile number with 10 digits starting with 05 (for example 0512345678)."),
+    "emp_no": ("الرقم الوظيفي أرقام فقط، من 3 إلى 10 خانات.", "Employee number: digits only, 3 to 10 digits."),
+    "name": ("اكتب اسمك (3 أحرف على الأقل).", "Enter your name (at least 3 characters)."),
+    "facility": ("اختر المنشأة التي تعمل بها.", "Choose the facility where you work."),
+    "job_cat": ("اختر فئتك الوظيفية.", "Choose your job category."),
+    "req_type": ("اختر نوع الطلب.", "Choose the type of request."),
+    "message": ("اكتب طلبك (10 أحرف على الأقل).", "Write your request (at least 10 characters)."),
+    "consent": ("ضع علامة الموافقة على إشعار الخصوصية للمتابعة.", "Tick the box to agree to the privacy notice."),
+}
+
+T = {
+ "ar": dict(
+  lang="ar", dir="rtl", sitename="نطاق شقراء الصحي", sub="تجمع الرياض الصحي الثالث", logoalt="شعار الصحة القابضة – Health Holding",
+  switch_label="English", switch_title="Switch to English", switch_lang="en",
+  nav=["الرئيسية", "طلب جديد", "الأسئلة", "الروابط", "التواصل"], navaria="التنقل الرئيسي", skip="تخطَّ إلى المحتوى",
+  fcare="قسم العناية بالموظفين", fext="التحويلة 671",
+  fnote="حملة توعية داخلية لموظفي نطاق شقراء الصحي. هذا الموقع ليس موقعًا حكوميًا رسميًا؛ المرجع الرسمي هو الصحة القابضة والجهات المختصة.",
+  # ticket form
+  tf_title="طلب جديد", tf_h1="عندي سؤال أو طلب", tf_p="ثلاث خطوات قصيرة. ستحصل على رقم تذكرة لمتابعة طلبك.",
+  tf_urgent="لا تكتب كلمات مرور أو بيانات بنكية أو أرقام هوية. للأمور العاجلة اتصل بقسم العناية بالموظفين: التحويلة 671.",
+  steps=["طلبك", "عنك", "التواصل والإرسال"], step_word="الخطوة", of="من",
+  s1="ماذا تحتاج؟", s2="عرّفنا بك", s3="كيف نتواصل معك؟",
+  lbl_type="نوع الطلب", lbl_message="اكتب طلبك", lbl_name="الاسم", lbl_emp="الرقم الوظيفي", lbl_facility="المنشأة",
+  lbl_job="الفئة الوظيفية", lbl_email="البريد الإلكتروني الوزاري", lbl_mobile="رقم الجوال",
+  choose="اختر…", hint_email="يجب أن ينتهي بـ moh.gov.sa", hint_mobile="10 أرقام تبدأ بـ 05", hint_emp="أرقام فقط",
+  hint_message="اكتب بوضوح في سطور قليلة. لا تكتب بيانات سرية.",
+  req="مطلوب", errsum="يرجى تصحيح الحقول التالية:", next="التالي", back="السابق", send="إرسال الطلب",
+  privacy="<b>إشعار الخصوصية:</b> تُجمع هذه البيانات لغرض واحد: معالجة طلبك والتواصل معك من قسم العناية بالموظفين. تُحفظ في قاعدة بيانات غير منشورة، ولا يُعلن بريدك أو جوالك. يمكنك طلب حذف تذكرتك بمراسلة القسم.",
+  consent="قرأت إشعار الخصوصية وأوافق على استخدام بياناتي لمعالجة طلبي",
+  have_ticket="قدّمت طلبًا سابقًا؟", track_link="تابع حالة طلبك",
+  # done
+  dn_title="تم استلام طلبك", dn_h="تم استلام طلبك", dn_your="رقم تذكرتك:",
+  dn_keep="<b>احتفظ بهذا الرقم</b>؛ لا يظهر مرة أخرى ولا يُرسل بالبريد حاليًا. تتابع حالة طلبك بالرقم وبريدك الوزاري. قد يتواصل معك قسم العناية بالموظفين على بريدك الوزاري أو جوالك.",
+  dn_track="متابعة التذكرة", dn_home="الرئيسية", dn_none_h="لا توجد تذكرة لعرضها",
+  dn_none_p="إن كنت قد أرسلت طلبًا للتو فاحتفظ برقم التذكرة الظاهر لك، أو أنشئ تذكرة جديدة.", dn_new="تذكرة جديدة",
+  # status
+  st_title="متابعة طلبي", st_h1="متابعة طلبي", st_p="أدخل رقم التذكرة والبريد الوزاري الذي استخدمته عند التقديم.",
+  lbl_ref="رقم التذكرة", lbl_email_st="البريد الإلكتروني الوزاري", st_show="عرض الحالة",
+  st_status="الحالة:", st_type="نوع الطلب:", st_created="تاريخ التقديم:", st_updated="آخر تحديث:", st_tz="(توقيت الرياض)",
+  st_reply="رد قسم العناية بالموظفين:", st_noreply="لم يصل رد بعد. سيظهر هنا عند إضافته.", st_ticket="تذكرة",
+  st_notfound="لا توجد تذكرة مطابقة. تأكد من رقم التذكرة والبريد الوزاري المستخدم عند التقديم.",
+  st_where="رقم التذكرة يظهر لك بعد الإرسال، بصيغة SHQ-XXXXXX-XXXXX.",
+  new_ticket="إنشاء طلب جديد", contact_guide="دليل التواصل مع العناية بالموظفين",
+  # messages
+  e400=("طلب غير صالح", "انتهت صلاحية الصفحة أو الطلب غير صالح. ارجع للصفحة السابقة وحدّثها ثم أعد المحاولة."),
+  e404=("الصفحة غير موجودة", "لم نجد الصفحة المطلوبة."),
+  e413=("الطلب كبير", "حجم الطلب أكبر من المسموح."),
+  e429=("محاولات كثيرة", "تجاوزت عدد المحاولات المسموح. انتظر بضع دقائق ثم أعد المحاولة."),
+  e500=("خطأ", "حدث خطأ غير متوقع. حاول لاحقًا أو راسل قسم العناية بالموظفين مباشرة."),
+  home="الرئيسية",
+ ),
+ "en": dict(
+  lang="en", dir="ltr", sitename="Shaqra Health Cluster", sub="Riyadh Third Health Cluster", logoalt="Health Holding logo",
+  switch_label="العربية", switch_title="التبديل إلى العربية", switch_lang="ar",
+  nav=["Home", "New request", "FAQ", "Links", "Contact"], navaria="Main navigation", skip="Skip to content",
+  fcare="Employee Care Department", fext="Ext. 671",
+  fnote="Internal awareness campaign for Shaqra Health Cluster staff. This is not an official government website; the official references are Health Holding and the responsible authorities.",
+  tf_title="New request", tf_h1="I have a question or request", tf_p="Three short steps. You will get a ticket number to track your request.",
+  tf_urgent="Do not write passwords, bank details or ID numbers. For urgent matters call the Employee Care Department: extension 671.",
+  steps=["Your request", "About you", "Contact & send"], step_word="Step", of="of",
+  s1="What do you need?", s2="Tell us who you are", s3="How can we reach you?",
+  lbl_type="Request type", lbl_message="Write your request", lbl_name="Name", lbl_emp="Employee number", lbl_facility="Facility",
+  lbl_job="Job category", lbl_email="Ministry email", lbl_mobile="Mobile number",
+  choose="Choose…", hint_email="Must end with moh.gov.sa", hint_mobile="10 digits starting with 05", hint_emp="Digits only",
+  hint_message="Write clearly in a few lines. Do not include confidential data.",
+  req="required", errsum="Please fix these fields:", next="Next", back="Back", send="Send request",
+  privacy="<b>Privacy notice:</b> This data is collected for one purpose only: to handle your request and to let the Employee Care Department contact you. It is stored in a database that is not public, and your email and mobile number are never published. You can ask for your ticket to be deleted by writing to the department.",
+  consent="I have read the privacy notice and agree that my data is used to handle my request",
+  have_ticket="Already sent a request?", track_link="Track your request",
+  dn_title="Request received", dn_h="We received your request", dn_your="Your ticket number:",
+  dn_keep="<b>Keep this number.</b> It will not be shown again and it is not sent by email at the moment. You track your request with this number and your ministry email. The Employee Care Department may contact you on your ministry email or mobile.",
+  dn_track="Track my ticket", dn_home="Home", dn_none_h="No ticket to show",
+  dn_none_p="If you just sent a request, keep the ticket number shown to you, or create a new ticket.", dn_new="New ticket",
+  st_title="Track my request", st_h1="Track my request", st_p="Enter your ticket number and the ministry email you used when you sent the request.",
+  lbl_ref="Ticket number", lbl_email_st="Ministry email", st_show="Show status",
+  st_status="Status:", st_type="Request type:", st_created="Sent on:", st_updated="Last update:", st_tz="(Riyadh time)",
+  st_reply="Reply from the Employee Care Department:", st_noreply="No reply yet. It will appear here when added.", st_ticket="Ticket",
+  st_notfound="No matching ticket. Check the ticket number and the ministry email you used when you sent the request.",
+  st_where="Your ticket number is shown after you send the request, like SHQ-XXXXXX-XXXXX.",
+  new_ticket="Create a new request", contact_guide="How to contact the Employee Care Department",
+  e400=("Invalid request", "The page expired or the request is not valid. Go back, refresh the page and try again."),
+  e404=("Page not found", "We could not find the page you asked for."),
+  e413=("Request too large", "The request is larger than allowed."),
+  e429=("Too many attempts", "You have made too many attempts. Wait a few minutes and try again."),
+  e500=("Error", "An unexpected error occurred. Try again later or contact the Employee Care Department directly."),
+  home="Home",
+ ),
+}

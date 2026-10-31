@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}لوحة التذاكر{% endblock %}
 {% block body %}
-<section style="padding-top:30px"><div class="wrap wide">
+<section class="s adm"><div class="wrap wide">
   <div class="adminbar">
     <h1 class="h1s">لوحة تذاكر العناية بالموظفين</h1>
     <form method="post" action="/admin/logout"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn" type="submit">خروج</button></form>
@@ -26,7 +26,7 @@
     <tbody>
     {% for r in rows %}
       <tr><td><a href="/admin/t/{{ r.ref }}" dir="ltr">{{ r.ref }}</a></td><td>{{ r.created_at|dt }}</td><td>{{ types.get(r.req_type, r.req_type) }}</td><td>{{ r.name }}</td><td dir="ltr">{{ r.emp_no }}</td><td>{{ r.facility }}</td><td><span class="badge st-{{ r.status }}">{{ statuses.get(r.status, r.status) }}</span></td></tr>
-    {% else %}<tr><td colspan="7" style="text-align:center">لا توجد تذاكر.</td></tr>{% endfor %}
+    {% else %}<tr><td colspan="7" class="center">لا توجد تذاكر.</td></tr>{% endfor %}
     </tbody></table></div>
   <div class="pager">
     {% if page>1 %}<a class="btn" href="/admin?page={{ page-1 }}{% if qs %}&{{ qs }}{% endif %}">السابق</a>{% endif %}
