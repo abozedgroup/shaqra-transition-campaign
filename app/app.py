@@ -567,6 +567,10 @@ STATIC_DIRS = {"assets", "infographics", "kb"}
 
 @app.route("/health")
 def health():
+    if request.args.get("dbg") == "1":
+        import hashlib
+        x = request.headers.get("X-Forwarded-For", "")
+        return "pid=%s ip=%s hops=%d ra=%s" % (os.getpid(), hashlib.sha256(client_ip().encode()).hexdigest()[:8], len(x.split(",")) if x else 0, hashlib.sha256((request.remote_addr or "").encode()).hexdigest()[:6]), 200, {"Content-Type": "text/plain"}
     return "ok", 200, {"Content-Type": "text/plain"}
 
 
