@@ -28,4 +28,15 @@
       if (!typing && Date.now() - last > 20000 && !document.querySelector('details[open].keep')) window.location.reload();
     }, +rq.getAttribute('data-refresh') * 1000);
   }
+  // after opening the ready-made email, record on the ticket that the employee was told (best effort)
+  [].forEach.call(document.querySelectorAll('a[data-notify]'), function (lnk) {
+    lnk.addEventListener('click', function () {
+      var tokEl = document.querySelector('input[name=csrf_token]');
+      if (!tokEl || !window.fetch) return;
+      var body = new URLSearchParams({ csrf_token: tokEl.value, action: 'notified' });
+      setTimeout(function () {
+        fetch(lnk.getAttribute('data-notify'), { method: 'POST', body: body, credentials: 'same-origin', redirect: 'manual' });
+      }, 300);
+    });
+  });
 })();

@@ -11,6 +11,12 @@
     {% if appt.slot and appt.kind == 'appointment' %}<p><b>الموعد:</b> {{ appt.slot|slot }}</p>{% endif %}
     {% if appt.emp_note %}<p><b>ملاحظة الموظف:</b> {{ appt.emp_note }}</p>{% endif %}
     {% if appt.staff_note %}<p><b>تعليماتكم له:</b> {{ appt.staff_note }}</p>{% endif %}
+    {% if appt_mail %}
+    <div class="notify">
+      <a class="btn solid" href="{{ appt_mail }}" data-notify="/admin/t/{{ tk.ref }}/appt">✉ إبلاغه بالموعد عبر البريد</a>
+      <span class="hint">يفتح برنامج البريد لديك (Outlook) برسالة جاهزة إلى <span dir="ltr">{{ tk.email }}</span>؛ راجعها ثم اضغط «إرسال».</span>
+    </div>
+    {% endif %}
     {% if live %}
     <form method="post" action="/admin/t/{{ tk.ref }}/appt" class="actions">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

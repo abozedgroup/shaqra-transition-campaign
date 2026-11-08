@@ -10,6 +10,7 @@ Times are stored as Riyadh local time "YYYY-MM-DD HH:MM" (appointments are a loc
 Imported at the end of app.py, so `app` (the module) is fully defined here."""
 import math
 from datetime import datetime, timedelta
+from urllib.parse import quote
 
 from flask import abort, g, redirect, render_template, request, session, url_for
 
@@ -336,7 +337,42 @@ def ticket_panel_ctx(con, tk, lang="ar"):
         day = next((x[0] for x in days if x[2] > 0), days[0][0] if days else "")
     slots = day_slots(con, d, datetime.strptime(day, "%Y-%m-%d").date()) if day else []
     return dict(appt=ap, appt_days=days, appt_day=day, appt_slots=slots, appt_statuses=STATUSES,
-                appt_cfg=cfg(d) if d else None, appt_dept=d)
+                appt_cfg=cfg(d) if d else None, appt_dept=d, appt_mail=appt_mailto(tk, ap, d))
+
+
+def appt_mailto(tk, ap, d):
+    """A ready-made email for the staff member's own mail program (Outlook) to tell the employee
+    the appointment. Nothing is sent by the server."""
+    if not ap or ap["kind"] != "appointment" or not ap["slot"] or not tk["email"] or tk["anonymous"] \
+            or ap["status"] not in ("booked", "confirmed", "change_requested"):
+        return ""
+    loc = cfg(d)["location"] if d else ""
+    # behind the TLS proxy the app sees plain http; the public address is https
+    status_url = ("https://%s/status" % request.host) if core.COOKIE_SECURE else request.host_url.rstrip("/") + "/status"
+    lines = [
+        "السلام عليكم %s،" % tk["name"],
+        "",
+        "حُجز لك موعد حضوري بخصوص طلبك رقم %s:" % tk["ref"],
+        "",
+        "الموعد: %s" % slot_label(ap["slot"]),
+        "الجهة: %s" % (d["name_ar"] if d else ""),
+    ]
+    if loc:
+        lines.append("المكان: %s" % loc)
+    if ap["staff_note"]:
+        lines.append("ملاحظة: %s" % ap["staff_note"])
+    lines += [
+        "",
+        "يُرجى تأكيد الموعد أو طلب تغييره من صفحة «متابعة طلبي»:",
+        status_url,
+        "برقم التذكرة %s ورمز المتابعة الذي ظهر لك عند تقديم الطلب." % tk["ref"],
+        "",
+        "عند وصولك سجّل حضورك من جهاز الاستقبال عند المدخل («لدي موعد») برقم التذكرة وآخر 4 أرقام من جوالك.",
+        "",
+        "قسم العناية بالموظفين – نطاق شقراء الصحي",
+    ]
+    subject = "موعدك الحضوري – طلب رقم %s – %s" % (tk["ref"], slot_label(ap["slot"]))
+    return "mailto:%s?subject=%s&body=%s" % (quote(tk["email"], safe="@"), quote(subject), quote("\r\n".join(lines)))
 
 
 @app.route("/admin/t/<ref>/appt", methods=["POST"])
@@ -401,6 +437,8 @@ def appt_staff_action(ref):
         con.commit()
         session["appt_done"] = 1
         return redirect(url_for("admin_ticket", ref=ref, saved=1))
+    elif action == "notified" and ap["status"] in ("booked", "confirmed", "change_requested"):
+        log_event(con, tk["id"], actor, "appt", "أبلغ الموظف بموعده عبر البريد.")
     elif action == "noshow" and ap["status"] in ("booked", "confirmed", "change_requested", "checked_in"):
         con.execute("UPDATE appointments SET status='no_show', updated_at=? WHERE id=?", (ts, ap["id"]))
         log_event(con, tk["id"], actor, "appt", "لم يحضر الموظف.")

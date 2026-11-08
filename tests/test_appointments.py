@@ -45,9 +45,19 @@ ok(len(slots) == 21, "7:30-14:30 every 20 min = 21 slots (%d)" % len(slots))
 a.post("/admin/t/%s/appt" % ref, data=dict(csrf_token=tok(h), action="book", slot=slots[3], staff_note="أحضر صورة الهوية"))
 ok(q("SELECT status, slot FROM appointments")[0] == ("booked", slots[3]), "booked " + slots[3])
 ok(q("SELECT status FROM tickets WHERE ref=?", ref)[0][0] == "in_progress", "ticket moved to in progress")
+from urllib.parse import unquote
+import html as _html
+r, h = get(a, "/admin/t/" + ref)
+m = re.search(r'href="(mailto:[^"]+)" data-notify', h); ok(bool(m), "email button shown after booking")
+mt = unquote(_html.unescape(m.group(1)))
+ok(mt.startswith("mailto:saad@moh.gov.sa?subject=") and "موعدك الحضوري – طلب رقم " + ref in mt and "أحضر صورة الهوية" in mt
+   and "/status" in mt and code not in mt, "email: address, subject, note, status link, no secret code")
+a.post("/admin/t/%s/appt" % ref, data=dict(csrf_token=tok(h), action="notified"))
+r, h = get(a, "/admin/t/" + ref); ok("أبلغ الموظف بموعده عبر البريد" in h, "notification recorded in the timeline")
 # capacity 1: the same slot is full for another ticket
 c2 = A.app.test_client(); r, h = get(c2, "/ticket"); c2.post("/ticket", data=dict(base, csrf_token=tok(h), email="b@moh.gov.sa", mobile="0559998877"))
 r, h = get(c2, "/ticket/done"); ref2, code2 = re.findall(r'<span class="ref">([^<]+)</span>', h)[:2]
+r, h = get(a, "/admin/t/" + ref2); ok("data-notify" not in h, "no email button without a booked appointment")
 r, h = get(a, "/admin/t/%s?appt_day=%s" % (ref2, slots[3][:10]))
 ok(re.search(r'value="%s" disabled' % re.escape(slots[3]), h) is not None, "booked slot shown full for others")
 r = a.post("/admin/t/%s/appt" % ref2, data=dict(csrf_token=tok(h), action="book", slot=slots[3]), follow_redirects=True)
