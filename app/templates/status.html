@@ -27,6 +27,13 @@
     {% set staff_ph = photos|selectattr('source','equalto','staff')|list %}{% set my_ph = photos|selectattr('source','equalto','employee')|list %}
     {% if staff_ph %}<p><b>{{ t.st_photos }}</b></p><div class="photos">{% for ph in staff_ph %}<a href="{{ pre }}/status/f/{{ ph.token }}" target="_blank" rel="noopener"><img src="{{ pre }}/status/f/{{ ph.token }}" alt="{{ t.st_photos }} {{ loop.index }}" loading="lazy"></a>{% endfor %}</div>{% endif %}
     {% if my_ph %}<p><b>{{ t.st_my_photos }}</b></p><div class="photos">{% for ph in my_ph %}<a href="{{ pre }}/status/f/{{ ph.token }}" target="_blank" rel="noopener"><img src="{{ pre }}/status/f/{{ ph.token }}" alt="{{ t.st_my_photos }} {{ loop.index }}" loading="lazy"></a>{% endfor %}</div>{% endif %}
+    {% if rated == 'ok' %}<div class="okmsg mt18" role="status"><b>{{ t.rt_thanks }}</b></div>
+    {% elif rated == 'reopened' %}<div class="okmsg mt18" role="status"><b>{{ t.rt_reopened }}</b></div>{% endif %}
+    {% if result.status == 'resolved' %}
+      <div class="ratebox"><h3>{{ t.rt_h }}</h3><p class="hint">{{ t.rt_p }} <b>{{ result.rate_due_at|dt }}</b>.</p>
+      {% set rate_action = u.status %}{% set ref = result.ref %}{% include "_rate_form.html" %}</div>
+    {% elif result.status == 'closed' and result.close_reason == 'auto' %}<p class="hint">{{ t.rt_auto }}</p>
+    {% elif result.status == 'closed' and result.rating and not rated %}<p class="hint">{{ t.rt_done }} {{ result.rating }} / 5</p>{% endif %}
   </div>
   {% endif %}
   <p class="faq-note"><a href="{{ u.ticket }}">{{ t.new_ticket }}</a> · <a href="{{ u.contact }}">{{ t.contact_guide }}</a></p>

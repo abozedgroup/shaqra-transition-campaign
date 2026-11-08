@@ -1,8 +1,10 @@
 <nav class="adminnav" aria-label="قائمة اللوحة">
   <a href="/admin" {% if anav=='list' %}class="cur"{% endif %}>التذاكر</a>
+  <a href="/admin/stats" {% if anav=='stats' %}class="cur"{% endif %}>المؤشرات</a>
   {% if me_admin %}
   <a href="/admin/departments" {% if anav=='depts' %}class="cur"{% endif %}>الأقسام</a>
   <a href="/admin/users" {% if anav=='users' %}class="cur"{% endif %}>الحسابات</a>
+  <a href="/admin/kiosks" {% if anav=='kiosks' %}class="cur"{% endif %}>أجهزة الاستقبال</a>
   {% endif %}
   <a href="/admin/password" {% if anav=='pw' %}class="cur"{% endif %}>كلمة المرور</a>
   <span class="who">{{ me.display_name }} · {{ roles.get(me.role, me.role) }}</span>

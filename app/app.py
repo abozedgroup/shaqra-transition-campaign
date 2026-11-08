@@ -53,7 +53,13 @@ FOLLOW_CODE_LEN = 6
 MAX_PHOTOS = 3
 MAX_PHOTO_BYTES = 8 * 1024 * 1024
 PHOTO_MAX_SIDE = 2000
-STATUSES = {"new": "جديدة", "escalated": "محالة", "in_progress": "قيد المعالجة", "closed": "مغلقة"}
+STATUSES = {"new": "جديدة", "escalated": "محالة", "in_progress": "قيد المعالجة",
+            "resolved": "تم الرد – بانتظار التقييم", "closed": "مغلقة"}
+RATE_WINDOW_DAYS = 5  # working days the employee has to rate before the ticket closes on its own
+CHANNELS = {"online": "إلكتروني", "walkin": "حضوري"}
+CLOSE_REASONS = {"rated": "بعد تقييم الموظف", "auto": "تلقائيًا بعد انتهاء مهلة التقييم",
+                 "staff": "أغلقها القسم دون تقييم", "": "—"}
+KIOSK_COOKIE = "shq_k"
 OPEN_STATUSES = ("new", "escalated", "in_progress")
 ROLES = {"admin": "مشرف عام", "staff": "موظف قسم"}
 INTAKE_KEY, COMPLAINTS_KEY = "care", "complaints"
@@ -177,6 +183,27 @@ CREATE TABLE IF NOT EXISTS attachments(
   size INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS ix_a_ticket ON attachments(ticket_id);
+CREATE TABLE IF NOT EXISTS ratings(
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ticket_id INTEGER NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+  at TEXT NOT NULL,
+  stars INTEGER NOT NULL,
+  resolved INTEGER NOT NULL,
+  comment TEXT NOT NULL DEFAULT '',
+  via TEXT NOT NULL DEFAULT 'online',
+  dept_id INTEGER,
+  user_id INTEGER
+);
+CREATE INDEX IF NOT EXISTS ix_r_ticket ON ratings(ticket_id);
+CREATE TABLE IF NOT EXISTS kiosks(
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  token_hash TEXT NOT NULL UNIQUE,
+  active INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL,
+  created_by TEXT NOT NULL DEFAULT '',
+  last_seen TEXT NOT NULL DEFAULT ''
+);
 """
 
 TICKET_NEW_COLS = [
@@ -187,6 +214,14 @@ TICKET_NEW_COLS = [
     ("follow_hash", "TEXT NOT NULL DEFAULT ''"),
     ("due_at", "TEXT NOT NULL DEFAULT ''"),
     ("closed_at", "TEXT NOT NULL DEFAULT ''"),
+    ("channel", "TEXT NOT NULL DEFAULT 'online'"),
+    ("assigned_user_id", "INTEGER"),
+    ("first_response_at", "TEXT NOT NULL DEFAULT ''"),
+    ("resolved_at", "TEXT NOT NULL DEFAULT ''"),
+    ("rate_due_at", "TEXT NOT NULL DEFAULT ''"),
+    ("close_reason", "TEXT NOT NULL DEFAULT ''"),
+    ("rating", "INTEGER"),
+    ("kiosk_id", "INTEGER"),
 ]
 
 
@@ -200,6 +235,9 @@ def init_db():
         if name not in cols:
             con.execute("ALTER TABLE tickets ADD COLUMN %s %s" % (name, decl))
     con.execute("CREATE INDEX IF NOT EXISTS ix_t_dept ON tickets(dept_id)")
+    # tickets closed before the rating cycle existed: closed by the section
+    con.execute("UPDATE tickets SET close_reason='staff' WHERE status='closed' AND close_reason=''")
+    con.execute("UPDATE tickets SET first_response_at=updated_at WHERE first_response_at='' AND reply<>''")
     for old, new in LEGACY_TYPES.items():  # the five old request types became two
         if old != new:
             con.execute("UPDATE tickets SET req_type=? WHERE req_type=?", (new, old))
@@ -354,7 +392,8 @@ def headers(resp):
 @app.before_request
 def mark():
     p = request.path
-    g.is_app = p.startswith(("/ticket", "/status", "/admin", "/app-static", "/en/ticket", "/en/status"))
+    g.is_app = p.startswith(("/ticket", "/status", "/admin", "/app-static", "/en/ticket", "/en/status",
+                             "/kiosk", "/en/kiosk"))
     g.lang = "en" if (p == "/en" or p.startswith("/en/")) else "ar"
 
 
@@ -412,6 +451,67 @@ def inject_i18n():
 # ---------------------------------------------------------------- validation
 
 
+# ---------------------------------------------------------------- automatic closing
+_sweep = {"at": 0.0}
+_sweep_lock = threading.Lock()
+
+
+def auto_close(con, force=False):
+    """Close tickets whose rating window passed: the reply is considered received."""
+    now = time.time()
+    with _sweep_lock:
+        if not force and now - _sweep["at"] < 120:
+            return 0
+        _sweep["at"] = now
+    ts = now_utc()
+    rows = con.execute("SELECT id FROM tickets WHERE status='resolved' AND rate_due_at<>'' AND rate_due_at<?",
+                       (ts,)).fetchall()
+    for (tid,) in rows:
+        con.execute("UPDATE tickets SET status='closed', closed_at=?, close_reason='auto', updated_at=? WHERE id=?",
+                    (ts, ts, tid))
+        log_event(con, tid, "النظام", "autoclose",
+                  "لم يقيّم الموظف خلال %d أيام عمل؛ يُعتبر الرد قد وصل." % RATE_WINDOW_DAYS)
+    if rows:
+        con.commit()
+    return len(rows)
+
+
+@app.before_request
+def _auto_close_hook():
+    if request.path.startswith(("/admin", "/status", "/en/status", "/kiosk")):
+        auto_close(db())
+
+
+def save_rating(con, row, stars, resolved, comment, via):
+    """Store the employee's rating. Resolved -> closed; not resolved -> back to the section."""
+    ts = now_utc()
+    con.execute("INSERT INTO ratings(ticket_id,at,stars,resolved,comment,via,dept_id,user_id) VALUES(?,?,?,?,?,?,?,?)",
+                (row["id"], ts, stars, 1 if resolved else 0, comment, via, row["dept_id"], row["assigned_user_id"]))
+    who = "مقدّم مجهول" if row["anonymous"] else "الموظف"
+    txt = "%d من 5 – %s%s" % (stars, "تم حل الطلب" if resolved else "لم يُحل الطلب", ("\n" + comment) if comment else "")
+    log_event(con, row["id"], who + (" (جهاز الاستقبال)" if via == "kiosk" else ""), "rating", txt)
+    if resolved:
+        con.execute("UPDATE tickets SET status='closed', closed_at=?, close_reason='rated', rating=?, updated_at=? "
+                    "WHERE id=?", (ts, stars, ts, row["id"]))
+    else:
+        d = dept_by_id(row["dept_id"])
+        con.execute("UPDATE tickets SET status='in_progress', rating=?, rate_due_at='', resolved_at='', due_at=?, "
+                    "updated_at=? WHERE id=?", (stars, add_workdays(ts, d["sla_days"] if d else 3), ts, row["id"]))
+        log_event(con, row["id"], "النظام", "reopen", "أُعيدت التذكرة للقسم لأن الموظف أفاد بأن طلبه لم يُحل.")
+    con.commit()
+
+
+def read_rating_form(form):
+    try:
+        stars = int(form.get("stars", "0"))
+    except ValueError:
+        stars = 0
+    res = form.get("resolved", "")
+    if stars < 1 or stars > 5 or res not in ("1", "0"):
+        return None
+    return stars, res == "1", clean(form.get("comment"), 1000)
+
+
 # ---------------------------------------------------------------- departments
 def all_depts(active_only=False):
     q = "SELECT * FROM departments" + (" WHERE active=1" if active_only else "") + " ORDER BY sort, id"
@@ -462,7 +562,7 @@ def _opt(opts, raw, lang):
     return ""
 
 
-def validate_ticket(form, lang="ar"):
+def validate_ticket(form, lang="ar", min_msg=10):
     i = 0 if lang == "ar" else 1
     errors, v = {}, {}
     v["req_type"] = clean(form.get("req_type"), 20)
@@ -474,7 +574,7 @@ def validate_ticket(form, lang="ar"):
         errors["topic"] = ERR["topic"][i]
     v["anonymous"] = form.get("anonymous") == "1" and v["req_type"] in ANON_TYPES
     v["message"] = clean(form.get("message"), 3000)
-    if len(v["message"]) < 10:
+    if len(v["message"]) < min_msg:
         errors["message"] = ERR["message"][i]
     raw_f = clean(form.get("facility"), 80)
     v["facility"] = _opt(FACILITY_OPTS, raw_f, lang)
@@ -684,8 +784,24 @@ def ticket_done():
 def status_lookup():
     lang = g.lang
     i = 0 if lang == "ar" else 1
-    result, error, dept_name, photos = None, None, "", []
-    if request.method == "POST":
+    result, error, dept_name, photos, rated = None, None, "", [], None
+    cols = ("SELECT id,ref,created_at,updated_at,req_type,status,reply,dept_id,anonymous,assigned_user_id,"
+            "rate_due_at,close_reason,rating FROM tickets ")
+    if request.method == "POST" and request.form.get("action") == "rate":
+        # rating a ticket this visitor has just looked up (same session)
+        check_csrf()
+        ref = norm_ref(clean(request.form.get("ref"), 30))
+        row = db().execute(cols + "WHERE ref=?", (ref,)).fetchone() if REF_RE.match(ref) else None
+        if not row or row["id"] not in session.get("st_ok", []):
+            abort(400)
+        vals = read_rating_form(request.form)
+        if row["status"] == "resolved" and vals:
+            save_rating(db(), row, *vals, via="online")
+            rated = "ok" if vals[1] else "reopened"
+        elif row["status"] == "resolved":
+            error = T[lang]["rt_missing"]
+        result = db().execute(cols + "WHERE id=?", (row["id"],)).fetchone()
+    elif request.method == "POST":
         check_csrf()
         ip = client_ip()
         if rate_hit("sl:" + ip, 30, 600):
@@ -694,7 +810,6 @@ def status_lookup():
         key = clean(request.form.get("email"), 120)
         row = None
         if REF_RE.match(ref):
-            cols = "SELECT id,ref,created_at,updated_at,req_type,status,reply,dept_id,anonymous FROM tickets "
             if "@" in key:
                 if EMAIL_RE.match(key.lower()):
                     row = db().execute(cols + "WHERE ref=? AND email=? AND anonymous=0",
@@ -708,15 +823,16 @@ def status_lookup():
             result = row
             ok_ids = [x for x in session.get("st_ok", []) if x != row["id"]][-9:] + [row["id"]]
             session["st_ok"] = ok_ids
-            photos = db().execute("SELECT token, source FROM attachments WHERE ticket_id=? ORDER BY id",
-                                  (row["id"],)).fetchall()
-            d = dept_by_id(row["dept_id"])
-            if d:
-                dept_name = d["name_ar"] if lang == "ar" else d["name_en"]
         else:
             time.sleep(0.4)
             error = T[lang]["st_notfound"]
-    return render_template("status.html", result=result, error=error, dept_name=dept_name, photos=photos,
+    if result:
+        photos = db().execute("SELECT token, source FROM attachments WHERE ticket_id=? ORDER BY id",
+                              (result["id"],)).fetchall()
+        d = dept_by_id(result["dept_id"])
+        if d:
+            dept_name = d["name_ar"] if lang == "ar" else d["name_en"]
+    return render_template("status.html", result=result, error=error, dept_name=dept_name, photos=photos, rated=rated,
                            statuses={k: v[i] for k, v in STATUSES_I18N.items()},
                            types={k: v[i] for k, v in TYPES_I18N.items()})
 
@@ -737,6 +853,161 @@ def status_photo(tok):
 def app_static(name):
     return send_from_directory(os.path.join(os.path.dirname(__file__), "static"), name,
                                max_age=3600)
+
+
+# ---------------------------------------------------------------- reception device (kiosk)
+def kiosk_hash(tok):
+    return hashlib.sha256(("shq-kiosk:" + tok).encode()).hexdigest()
+
+
+def current_kiosk():
+    tok = request.cookies.get(KIOSK_COOKIE, "")
+    if not tok or len(tok) > 100:
+        return None
+    k = db().execute("SELECT * FROM kiosks WHERE token_hash=? AND active=1", (kiosk_hash(tok),)).fetchone()
+    if k:
+        db().execute("UPDATE kiosks SET last_seen=? WHERE id=?", (now_utc(), k["id"]))
+        db().commit()
+    return k
+
+
+def kiosk_required(fn):
+    @wraps(fn)
+    def w(*a, **kw):
+        g.kiosk = current_kiosk()
+        if not g.kiosk:
+            return render_template("kiosk_msg.html", title=T[g.lang]["k_off_h"], msg=T[g.lang]["k_off_p"],
+                                   back=False), 403
+        return fn(*a, **kw)
+    return w
+
+
+def _kiosk_pre():
+    return "/en/kiosk" if g.lang == "en" else "/kiosk"
+
+
+@app.route("/kiosk")
+@app.route("/en/kiosk")
+@kiosk_required
+def kiosk_home():
+    session.pop("k_rate", None)
+    return render_template("kiosk_home.html", kpre=_kiosk_pre())
+
+
+K_ERR_ORDER = ["req_type", "topic", "message", "name", "emp_no", "facility", "job_cat", "email", "mobile", "consent"]
+
+
+@app.route("/kiosk/new", methods=["GET", "POST"])
+@app.route("/en/kiosk/new", methods=["GET", "POST"])
+@kiosk_required
+def kiosk_new():
+    lang, i = g.lang, (0 if g.lang == "ar" else 1)
+    values, errors = {}, {}
+    if request.method == "POST":
+        check_csrf()
+        if rate_hit("kn:%d" % g.kiosk["id"], 60, 600):
+            abort(429)
+        values, errors = validate_ticket(request.form, lang, min_msg=5)
+        if not errors:
+            con = db()
+            if not values["anonymous"]:
+                since = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+                if con.execute("SELECT COUNT(*) FROM tickets WHERE email=? AND created_at>?",
+                               (values["email"], since)).fetchone()[0] >= 5:
+                    abort(429)
+            dept = dept_by_key(COMPLAINTS_KEY) if values["req_type"] in ANON_TYPES else None
+            if not dept or not dept["active"]:
+                dept = dept_by_key(INTAKE_KEY)
+            with _ref_lock:
+                ref = new_ref(con)
+                ts = now_utc()
+                code, fh = "", ""
+                if values["anonymous"]:
+                    code = "".join(secrets.choice(REF_ALPHABET) for _ in range(FOLLOW_CODE_LEN))
+                    fh = follow_hash(ref, code)
+                cur = con.execute(
+                    "INSERT INTO tickets(ref,created_at,updated_at,email,mobile,emp_no,name,facility,job_cat,req_type,"
+                    "message,lang,topic,dept_id,anonymous,follow_hash,due_at,channel,kiosk_id) "
+                    "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    (ref, ts, ts, values["email"], values["mobile"], values["emp_no"], values["name"],
+                     values["facility"], values["job_cat"], values["req_type"], values["message"], lang,
+                     values["topic"], dept["id"], 1 if values["anonymous"] else 0, fh,
+                     add_workdays(ts, dept["sla_days"]), "walkin", g.kiosk["id"]))
+                log_event(con, cur.lastrowid, "الموظف (جهاز الاستقبال: %s)" % g.kiosk["name"], "create",
+                          "طلب حضوري", to_dept=dept["id"])
+                con.commit()
+            session["k_done"] = [ref, code, dept["name_ar"] if lang == "ar" else dept["name_en"]]
+            return redirect(_kiosk_pre() + "/done")
+    else:
+        t = request.args.get("type", "")
+        if t in REQ_TYPES:
+            values["req_type"] = t
+    first_bad = next((f for f in K_ERR_ORDER if f in errors), "")
+    return render_template(
+        "kiosk_new.html", v=values, errors=errors, first_bad=first_bad, kpre=_kiosk_pre(),
+        facilities=[(k, ar if lang == "ar" else en) for k, ar, en in FACILITY_OPTS],
+        jobs=[(k, ar if lang == "ar" else en) for k, ar, en in JOB_OPTS],
+        types=[(k, TYPES_I18N[k][i], TYPE_HELP[k][i]) for k in REQ_TYPES], anon_types=ANON_TYPES,
+        topics=topic_opts(lang), err_msgs={k: ERR[k][i] for k in ERR}, err_order=K_ERR_ORDER,
+    ), (400 if errors else 200)
+
+
+@app.route("/kiosk/done")
+@app.route("/en/kiosk/done")
+@kiosk_required
+def kiosk_done():
+    d = session.pop("k_done", None)
+    if not d:
+        return redirect(_kiosk_pre())
+    return render_template("kiosk_done.html", ref=d[0], code=d[1], dept=d[2], kpre=_kiosk_pre())
+
+
+@app.route("/kiosk/rate", methods=["GET", "POST"])
+@app.route("/en/kiosk/rate", methods=["GET", "POST"])
+@kiosk_required
+def kiosk_rate():
+    lang = g.lang
+    con = db()
+    row, error, stage = None, None, "find"
+    cols = "SELECT * FROM tickets "
+    if request.method == "POST":
+        check_csrf()
+        if request.form.get("action") == "rate":
+            ref = norm_ref(clean(request.form.get("ref"), 30))
+            row = con.execute(cols + "WHERE ref=?", (ref,)).fetchone() if REF_RE.match(ref) else None
+            if not row or session.get("k_rate") != row["id"]:
+                return redirect(_kiosk_pre() + "/rate")
+            vals = read_rating_form(request.form)
+            if row["status"] != "resolved":
+                stage = "closed"
+            elif not vals:
+                stage, error = "rate", T[lang]["rt_missing"]
+            else:
+                save_rating(con, row, *vals, via="kiosk")
+                session.pop("k_rate", None)
+                stage = "thanks" if vals[1] else "reopened"
+        else:
+            if rate_hit("kr:%d" % g.kiosk["id"], 40, 600):
+                abort(429)
+            ref = norm_ref(clean(request.form.get("ref"), 30))
+            key = norm_code(clean(request.form.get("key"), 20))
+            if REF_RE.match(ref):
+                r = con.execute(cols + "WHERE ref=?", (ref,)).fetchone()
+                if r and ((not r["anonymous"] and len(key) == 4 and r["mobile"].endswith(key))
+                          or (r["anonymous"] and r["follow_hash"] == follow_hash(ref, key))):
+                    row = r
+            if not row:
+                time.sleep(0.4)
+                error = T[lang]["k_rate_notfound"]
+            elif row["status"] == "resolved":
+                session["k_rate"] = row["id"]
+                stage = "rate"
+            elif row["status"] == "closed":
+                stage = "closed"
+            else:
+                stage = "open"
+    reply = row["reply"] if row is not None and stage == "rate" else ""
+    return render_template("kiosk_rate.html", row=row, stage=stage, error=error, reply=reply, kpre=_kiosk_pre())
 
 
 # ---------------------------------------------------------------- staff accounts
@@ -894,7 +1165,8 @@ def _overdue_sql():
 
 
 def _filters(u):
-    f = {k: clean(request.args.get(k), 60) for k in ("status", "facility", "type", "q", "topic", "dept", "late")}
+    f = {k: clean(request.args.get(k), 60) for k in ("status", "facility", "type", "q", "topic", "dept", "late",
+                                                        "channel", "mine")}
     where, args = _visible(u)
     if f["status"] == "open":
         where.append("status IN ('new','escalated','in_progress')")
@@ -916,6 +1188,14 @@ def _filters(u):
         where.append("dept_id=?"); args.append(int(f["dept"]))
     else:
         f["dept"] = ""
+    if f["channel"] in CHANNELS:
+        where.append("channel=?"); args.append(f["channel"])
+    else:
+        f["channel"] = ""
+    if f["mine"] == "1" and u["id"]:
+        where.append("assigned_user_id=?"); args.append(u["id"])
+    else:
+        f["mine"] = ""
     if f["late"] == "1":
         s, a = _overdue_sql()
         where.append(s); args.append(a)
@@ -933,6 +1213,19 @@ def _topic_names():
     names = {d["key"]: d["name_ar"] for d in all_depts()}
     names[GENERAL_TOPIC] = "عام / أخرى"
     return names
+
+
+@app.route("/admin/open")
+@login_required
+def admin_open():
+    """Quick jump: type a ticket number (e.g. the one a walk-in employee shows you)."""
+    ref = norm_ref(clean(request.args.get("ref"), 30))
+    if REF_RE.match(ref):
+        r = db().execute("SELECT * FROM tickets WHERE ref=?", (ref,)).fetchone()
+        u = current_user()
+        if r and (is_admin_user(u) or r["dept_id"] == u["dept_id"]):
+            return redirect(url_for("admin_ticket", ref=ref))
+    return redirect(url_for("admin_list", notfound=ref[:20]))
 
 
 @app.route("/admin")
@@ -969,13 +1262,16 @@ def admin_list():
                            counts=counts, late=late, statuses=STATUSES, types=REQ_TYPES, facilities=FACILITIES,
                            qs=qs, depts=depts, dept_names={d["id"]: d["name_ar"] for d in depts},
                            topic_names=_topic_names(), summary=summary, now=now_utc(), my_dept=my_dept,
-                           moved=clean(request.args.get("moved"), 30))
+                           moved=clean(request.args.get("moved"), 30), channels=CHANNELS,
+                           notfound=clean(request.args.get("notfound"), 20))
 
 
 # ---------------------------------------------------------------- one ticket
 EVENT_KINDS = {"create": "تقديم التذكرة", "status": "تغيير الحالة", "reply": "رد على الموظف",
                "note": "ملاحظة داخلية", "escalate": "تصعيد / إحالة", "topic": "تعديل التصنيف",
-               "photo": "إرفاق صور"}
+               "photo": "إرفاق صور", "resolve": "إنهاء وإرسال للتقييم", "rating": "تقييم الموظف",
+               "autoclose": "إغلاق تلقائي", "close": "إغلاق دون تقييم", "reopen": "إعادة فتح",
+               "assign": "استلام"}
 
 
 def _load_ticket(ref, u):
@@ -999,33 +1295,66 @@ def admin_ticket(ref):
         check_csrf()
         action = request.form.get("action", "")
         ts = now_utc()
-        if action == "update":
-            st = request.form.get("status", "")
-            if st not in STATUSES:
-                abort(400)
+        if action in ("save", "resolve"):
             reply = clean(request.form.get("reply"), 3000)
             photos, perr = read_photos(request.files.getlist("photos"))
             if perr:
-                err = ERR[perr][0]
-                return _render_ticket(row, u, err)
+                return _render_ticket(row, u, ERR[perr][0])
+            if row["status"] not in OPEN_STATUSES and row["status"] != "resolved":
+                abort(400)
+            if action == "resolve" and len(reply) < 2:
+                return _render_ticket(row, u, "اكتب الرد على الموظف قبل إنهاء التذكرة وإرسالها للتقييم.")
             sets, vals = ["updated_at=?"], [ts]
-            if st != row["status"]:
-                sets.append("status=?"); vals.append(st)
-                if st == "closed":
-                    sets.append("closed_at=?"); vals.append(ts)
-                elif row["status"] == "closed":  # reopened: a fresh deadline
-                    d = dept_by_id(row["dept_id"])
-                    sets += ["closed_at=?", "due_at=?"]; vals += ["", add_workdays(ts, d["sla_days"] if d else 3)]
-                log_event(con, row["id"], actor, "status",
-                          "%s ← %s" % (STATUSES[st], STATUSES.get(row["status"], row["status"])))
+            if u["id"] and (row["assigned_user_id"] is None or action == "resolve"):
+                sets.append("assigned_user_id=?"); vals.append(u["id"])
             if reply != row["reply"]:
                 sets.append("reply=?"); vals.append(reply)
                 log_event(con, row["id"], actor, "reply", reply)
+                if reply and not row["first_response_at"]:
+                    sets.append("first_response_at=?"); vals.append(ts)
             if photos:
                 store_photos(con, row["id"], photos, "staff", actor)
                 log_event(con, row["id"], actor, "photo", "%d صورة مرفقة مع الرد (يراها الموظف)" % len(photos))
+            if action == "resolve" and row["status"] != "resolved":
+                rate_due = add_workdays(ts, RATE_WINDOW_DAYS)
+                sets += ["status=?", "resolved_at=?", "rate_due_at=?"]; vals += ["resolved", ts, rate_due]
+                if not row["first_response_at"] and "first_response_at=?" not in sets:
+                    sets.append("first_response_at=?"); vals.append(ts)
+                log_event(con, row["id"], actor, "resolve",
+                          "أُرسل الرد للموظف لتقييمه. تُغلق تلقائيًا إن لم يقيّم حتى %s." % fmt_dt(rate_due))
+            elif action == "save" and row["status"] in ("new", "escalated"):
+                sets.append("status=?"); vals.append("in_progress")
+                log_event(con, row["id"], actor, "status", "قيد المعالجة")
             con.execute("UPDATE tickets SET " + ", ".join(sets) + " WHERE id=?", vals + [row["id"]])
             con.commit()
+            return redirect(url_for("admin_ticket", ref=ref, saved=1))
+        if action == "close":
+            reason = clean(request.form.get("close_note"), 1000)
+            if row["status"] == "closed":
+                abort(400)
+            if len(reason) < 3:
+                return _render_ticket(row, u, "اكتب سبب الإغلاق دون تقييم (مثل: مكررة، أو لا تخص الإدارة).")
+            con.execute("UPDATE tickets SET status='closed', closed_at=?, close_reason='staff', updated_at=?, "
+                        "assigned_user_id=COALESCE(assigned_user_id, ?) WHERE id=?",
+                        (ts, ts, u["id"] or None, row["id"]))
+            log_event(con, row["id"], actor, "close", reason)
+            con.commit()
+            return redirect(url_for("admin_ticket", ref=ref, saved=1))
+        if action == "reopen":
+            if row["status"] not in ("resolved", "closed"):
+                abort(400)
+            d = dept_by_id(row["dept_id"])
+            con.execute("UPDATE tickets SET status='in_progress', closed_at='', close_reason='', rate_due_at='', "
+                        "resolved_at='', due_at=?, updated_at=? WHERE id=?",
+                        (add_workdays(ts, d["sla_days"] if d else 3), ts, row["id"]))
+            log_event(con, row["id"], actor, "reopen", clean(request.form.get("reopen_note"), 1000))
+            con.commit()
+            return redirect(url_for("admin_ticket", ref=ref, saved=1))
+        if action == "take":
+            if u["id"]:
+                con.execute("UPDATE tickets SET assigned_user_id=?, updated_at=? WHERE id=?", (u["id"], ts, row["id"]))
+                log_event(con, row["id"], actor, "assign", "استلم التذكرة")
+                con.commit()
             return redirect(url_for("admin_ticket", ref=ref, saved=1))
         if action == "note":
             text = clean(request.form.get("note"), 3000)
@@ -1045,8 +1374,9 @@ def admin_ticket(ref):
             elif len(reason) < 5:
                 err = "اكتب سبب التصعيد ليعرف القسم المستلم ما المطلوب."
             else:
-                con.execute("UPDATE tickets SET dept_id=?, status='escalated', due_at=?, closed_at='', updated_at=? "
-                            "WHERE id=?", (d["id"], add_workdays(ts, d["sla_days"]), ts, row["id"]))
+                con.execute("UPDATE tickets SET dept_id=?, status='escalated', due_at=?, closed_at='', close_reason='', "
+                            "rate_due_at='', resolved_at='', assigned_user_id=NULL, updated_at=? WHERE id=?",
+                            (d["id"], add_workdays(ts, d["sla_days"]), ts, row["id"]))
                 log_event(con, row["id"], actor, "escalate", reason, row["dept_id"], d["id"])
                 con.commit()
                 if is_admin_user(u):
@@ -1071,7 +1401,11 @@ def _render_ticket(row, u, err=None):
     dnames = {d["id"]: d["name_ar"] for d in depts}
     events = con.execute("SELECT * FROM events WHERE ticket_id=? ORDER BY id", (row["id"],)).fetchall()
     photos = con.execute("SELECT * FROM attachments WHERE ticket_id=? ORDER BY id", (row["id"],)).fetchall()
-    return render_template("admin_ticket.html", tk=row, statuses=STATUSES, types=REQ_TYPES,
+    ratings = con.execute("SELECT * FROM ratings WHERE ticket_id=? ORDER BY id", (row["id"],)).fetchall()
+    assignee = con.execute("SELECT display_name FROM users WHERE id=?", (row["assigned_user_id"],)).fetchone() \
+        if row["assigned_user_id"] else None
+    return render_template("admin_ticket.html", ratings=ratings, assignee=assignee, channels=CHANNELS,
+                           close_reasons=CLOSE_REASONS, rate_days=RATE_WINDOW_DAYS, open_statuses=OPEN_STATUSES, tk=row, statuses=STATUSES, types=REQ_TYPES,
                            saved=request.args.get("saved") == "1", err=err, events=events, kinds=EVENT_KINDS,
                            dept_names=dnames, depts=[d for d in depts if d["active"] and d["id"] != row["dept_id"]],
                            topic_names=_topic_names(), now=now_utc(), photos=photos, max_photos=MAX_PHOTOS,
@@ -1219,6 +1553,261 @@ def admin_users():
     return render_template("admin_users.html", users=users, depts=depts,
                            dept_names={d["id"]: d["name_ar"] for d in depts}, err=err, msg=msg,
                            suggested=secrets.token_urlsafe(9))
+
+
+@app.route("/admin/kiosks", methods=["GET", "POST"])
+@admin_only
+def admin_kiosks():
+    con = db()
+    msg, err = None, None
+    if request.method == "POST":
+        check_csrf()
+        action = request.form.get("action", "")
+        if action == "activate":
+            name = clean(request.form.get("name"), 60)
+            if len(name) < 2:
+                err = "اكتب اسمًا للجهاز (مثل: آيباد مدخل الإدارة)."
+            else:
+                tok = secrets.token_urlsafe(32)
+                u = current_user()
+                con.execute("INSERT INTO kiosks(name,token_hash,created_at,created_by) VALUES(?,?,?,?)",
+                            (name, kiosk_hash(tok), now_utc(), u["username"]))
+                con.commit()
+                session.clear()  # the supervisor is logged out; the device now only shows the reception screens
+                resp = redirect("/kiosk")
+                resp.set_cookie(KIOSK_COOKIE, tok, max_age=400 * 86400, secure=COOKIE_SECURE, httponly=True,
+                                samesite="Lax", path="/")
+                return resp
+        elif action in ("disable", "enable"):
+            kid = request.form.get("id", "")
+            if kid.isdigit():
+                con.execute("UPDATE kiosks SET active=? WHERE id=?", (1 if action == "enable" else 0, int(kid)))
+                con.commit()
+                msg = "تم تحديث الجهاز."
+    kiosks = con.execute("SELECT k.*, (SELECT COUNT(*) FROM tickets t WHERE t.kiosk_id=k.id) AS n "
+                         "FROM kiosks k ORDER BY active DESC, id DESC").fetchall()
+    return render_template("admin_kiosks.html", kiosks=kiosks, msg=msg, err=err)
+
+
+# ---------------------------------------------------------------- indicators
+def _parse_day(s, default):
+    try:
+        return datetime.strptime(s, "%Y-%m-%d").date()
+    except (TypeError, ValueError):
+        return default
+
+
+def _utc_of_day(d):
+    """Start of a Riyadh calendar day, as the stored UTC string."""
+    return datetime(d.year, d.month, d.day, tzinfo=RIYADH).astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _ts(s):
+    try:
+        return datetime.strptime(s, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+    except (TypeError, ValueError):
+        return None
+
+
+def _hours(a, b):
+    ta, tb = _ts(a), _ts(b)
+    return (tb - ta).total_seconds() / 3600 if ta and tb and tb >= ta else None
+
+
+def _avg(xs):
+    xs = [x for x in xs if x is not None]
+    return sum(xs) / len(xs) if xs else None
+
+
+def _median(xs):
+    xs = sorted(x for x in xs if x is not None)
+    if not xs:
+        return None
+    n = len(xs)
+    return xs[n // 2] if n % 2 else (xs[n // 2 - 1] + xs[n // 2]) / 2
+
+
+def _pct(a, b):
+    return round(100.0 * a / b) if b else None
+
+
+def _dur(h):
+    if h is None:
+        return "—"
+    if h < 24:
+        return "%s ساعة" % (max(1, round(h)) if h >= 1 else "أقل من 1")
+    return "%.1f يوم" % (h / 24)
+
+
+app.jinja_env.filters["dur"] = _dur
+
+
+def compute_stats(u, args):
+    today = datetime.now(RIYADH).date()
+    d_to = _parse_day(args.get("to"), today)
+    d_from = _parse_day(args.get("from"), d_to - timedelta(days=29))
+    if d_from > d_to:
+        d_from, d_to = d_to, d_from
+    if (d_to - d_from).days > 730:
+        d_from = d_to - timedelta(days=730)
+    f = {"from": d_from.isoformat(), "to": d_to.isoformat(), "dept": "", "channel": ""}
+    where, params = _visible(u)
+    where = list(where)
+    if is_admin_user(u) and (args.get("dept") or "").isdigit():
+        f["dept"] = args.get("dept")
+        where.append("dept_id=?"); params.append(int(f["dept"]))
+    if args.get("channel") in CHANNELS:
+        f["channel"] = args.get("channel")
+        where.append("channel=?"); params.append(f["channel"])
+    lo, hi = _utc_of_day(d_from), _utc_of_day(d_to + timedelta(days=1))
+    con = db()
+    base = (" AND " + " AND ".join(where)) if where else ""
+    rows = con.execute("SELECT * FROM tickets WHERE created_at>=? AND created_at<?" + base, [lo, hi] + params).fetchall()
+    ids = [r["id"] for r in rows]
+    now = now_utc()
+    esc, rat = set(), {}
+    if ids:
+        qs = ",".join("?" * len(ids))
+        esc = {r[0] for r in con.execute("SELECT DISTINCT ticket_id FROM events WHERE kind='escalate' AND ticket_id IN (%s)" % qs, ids)}
+        for r in con.execute("SELECT * FROM ratings WHERE ticket_id IN (%s) ORDER BY id" % qs, ids):
+            rat.setdefault(r["ticket_id"], []).append(r)
+    users = {r["id"]: r["display_name"] for r in con.execute("SELECT id, display_name FROM users")}
+    dnames = {d["id"]: d["name_ar"] for d in all_depts()}
+    tnames = _topic_names()
+
+    def finish(r):
+        return r["resolved_at"] or r["closed_at"] or ""
+
+    def summarize(rs):
+        n = len(rs)
+        closed = [r for r in rs if r["status"] == "closed"]
+        done = [r for r in rs if finish(r)]
+        on_time = [r for r in done if r["due_at"] and finish(r) <= r["due_at"]]
+        allr = [x for r in rs for x in rat.get(r["id"], [])]
+        reached = [r for r in rs if r["resolved_at"] or r["close_reason"] in ("rated", "auto")]
+        rated_t = [r for r in reached if rat.get(r["id"])]
+        return {
+            "n": n, "closed": len(closed),
+            "open": sum(1 for r in rs if r["status"] in OPEN_STATUSES),
+            "waiting": sum(1 for r in rs if r["status"] == "resolved"),
+            "late": sum(1 for r in rs if r["status"] in OPEN_STATUSES and r["due_at"] and r["due_at"] < now),
+            "sla": _pct(len(on_time), len(done)), "done": len(done),
+            "first": _avg([_hours(r["created_at"], r["first_response_at"]) for r in rs if r["first_response_at"]]),
+            "resolve": _avg([_hours(r["created_at"], finish(r)) for r in done]),
+            "resolve_med": _median([_hours(r["created_at"], finish(r)) for r in done]),
+            "esc": sum(1 for r in rs if r["id"] in esc),
+            "esc_pct": _pct(sum(1 for r in rs if r["id"] in esc), n),
+            "nrat": len(allr), "stars": _avg([x["stars"] for x in allr]),
+            "csat": _pct(sum(1 for x in allr if x["stars"] >= 4), len(allr)),
+            "unresolved": sum(1 for x in allr if not x["resolved"]),
+            "resp": _pct(len(rated_t), len(reached)),
+            "auto": sum(1 for r in rs if r["close_reason"] == "auto"),
+            "staff_closed": sum(1 for r in rs if r["close_reason"] == "staff"),
+            "walkin": sum(1 for r in rs if r["channel"] == "walkin"),
+            "anon": sum(1 for r in rs if r["anonymous"]),
+        }
+
+    def group(keyf, namef):
+        g_ = {}
+        for r in rows:
+            g_.setdefault(keyf(r), []).append(r)
+        out = [(namef(k), summarize(v)) for k, v in g_.items()]
+        return sorted(out, key=lambda x: -x[1]["n"])
+
+    total = summarize(rows)
+    by = {
+        "dept": group(lambda r: r["dept_id"], lambda k: dnames.get(k, "—")),
+        "topic": group(lambda r: r["topic"], lambda k: tnames.get(k, "—")),
+        "type": group(lambda r: r["req_type"], lambda k: REQ_TYPES.get(k, k)),
+        "channel": group(lambda r: r["channel"], lambda k: CHANNELS.get(k, k)),
+        "facility": group(lambda r: r["facility"], lambda k: k or "لم تُذكر"),
+        "staff": group(lambda r: r["assigned_user_id"],
+                       lambda k: users.get(k, "غير مستلمة") if k else "غير مستلمة"),
+    }
+    # daily (or weekly for long ranges) received vs closed
+    days = (d_to - d_from).days + 1
+    step = 7 if days > 62 else 1
+    buckets = []
+    d = d_from
+    while d <= d_to:
+        buckets.append(d)
+        d += timedelta(days=step)
+    def bucket_of(iso):
+        t = _ts(iso)
+        if not t:
+            return None
+        dd = t.astimezone(RIYADH).date()
+        k = (dd - d_from).days // step
+        return k if 0 <= k < len(buckets) else None
+    rec = [0] * len(buckets)
+    clo = [0] * len(buckets)
+    for r in rows:
+        k = bucket_of(r["created_at"])
+        if k is not None:
+            rec[k] += 1
+    cw = (" AND " + " AND ".join(where)) if where else ""
+    for (c_at,) in con.execute("SELECT closed_at FROM tickets WHERE closed_at>=? AND closed_at<?" + cw,
+                               [lo, hi] + params):
+        k = bucket_of(c_at)
+        if k is not None:
+            clo[k] += 1
+    series = [(b.strftime("%m-%d"), rec[i], clo[i]) for i, b in enumerate(buckets)]
+    low = []
+    for r in rows:
+        for x in rat.get(r["id"], []):
+            if x["stars"] <= 2 or not x["resolved"]:
+                low.append((r, x))
+    low.sort(key=lambda t: t[1]["at"], reverse=True)
+    return dict(f=f, total=total, by=by, series=series, step=step, low=low[:50],
+                depts=all_depts(), channels=CHANNELS, period_days=days)
+
+
+@app.route("/admin/stats")
+@login_required
+def admin_stats():
+    u = current_user()
+    s = compute_stats(u, request.args)
+    my_dept = dept_by_id(u["dept_id"]) if u["dept_id"] else None
+    return render_template("admin_stats.html", s=s, my_dept=my_dept,
+                           presets=_stat_presets())
+
+
+def _stat_presets():
+    t = datetime.now(RIYADH).date()
+    m0 = t.replace(day=1)
+    prev_end = m0 - timedelta(days=1)
+    return [("آخر 7 أيام", t - timedelta(days=6), t), ("آخر 30 يومًا", t - timedelta(days=29), t),
+            ("هذا الشهر", m0, t), ("الشهر الماضي", prev_end.replace(day=1), prev_end),
+            ("آخر 90 يومًا", t - timedelta(days=89), t), ("هذه السنة", t.replace(month=1, day=1), t)]
+
+
+@app.route("/admin/stats.csv")
+@login_required
+def admin_stats_csv():
+    s = compute_stats(current_user(), request.args)
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["الفترة", s["f"]["from"], s["f"]["to"]])
+    head = ["", "المستلمة", "المغلقة", "المفتوحة", "بانتظار التقييم", "المتأخرة", "الالتزام بالمهلة %",
+            "متوسط أول رد (ساعة)", "متوسط زمن الإنجاز (ساعة)", "المصعّدة", "عدد التقييمات", "متوسط التقييم",
+            "نسبة الرضا %", "لم يُحل", "نسبة من قيّم %", "أُغلقت تلقائيًا"]
+
+    def line(name, x):
+        return [_csv_safe(v) for v in (name, x["n"], x["closed"], x["open"], x["waiting"], x["late"], x["sla"],
+                round(x["first"], 1) if x["first"] is not None else "",
+                round(x["resolve"], 1) if x["resolve"] is not None else "", x["esc"], x["nrat"],
+                round(x["stars"], 2) if x["stars"] is not None else "", x["csat"], x["unresolved"], x["resp"],
+                x["auto"])]
+    w.writerow([]); w.writerow(head); w.writerow(line("الإجمالي", s["total"]))
+    titles = {"dept": "حسب القسم", "topic": "حسب الموضوع", "type": "حسب النوع", "channel": "حسب القناة",
+              "facility": "حسب المنشأة", "staff": "حسب الموظف المسؤول"}
+    for k, title in titles.items():
+        w.writerow([]); w.writerow([title]); w.writerow(head)
+        for name, x in s["by"][k]:
+            w.writerow(line(name, x))
+    name = "indicators-%s-%s.csv" % (s["f"]["from"], s["f"]["to"])
+    return Response("\ufeff" + buf.getvalue(), mimetype="text/csv; charset=utf-8",
+                    headers={"Content-Disposition": 'attachment; filename="%s"' % name})
 
 
 # ---------------------------------------------------------------- export

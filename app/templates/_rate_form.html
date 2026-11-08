@@ -1,0 +1,22 @@
+{# rating form – needs: rate_action, ref, t ; optional: rate_hidden (dict) #}
+<form class="rateform" method="post" action="{{ rate_action }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="action" value="rate"><input type="hidden" name="ref" value="{{ ref }}">
+  {% for k, v in (rate_hidden or {}).items() %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
+  <fieldset class="rate-q">
+    <legend>{{ t.rt_q_resolved }}</legend>
+    <div class="yn">
+      <label><input type="radio" name="resolved" value="1" required> <span>{{ t.rt_yes }}</span></label>
+      <label><input type="radio" name="resolved" value="0"> <span>{{ t.rt_no }}</span></label>
+    </div>
+  </fieldset>
+  <fieldset class="rate-q">
+    <legend>{{ t.rt_q_stars }}</legend>
+    <div class="stars">
+      {% for n in range(1, 6) %}<label><input type="radio" name="stars" value="{{ n }}" required> <span><b>{{ n }}</b><small>{{ t.rt_scale[n-1] }}</small></span></label>{% endfor %}
+    </div>
+  </fieldset>
+  <div class="field"><label for="rt-comment">{{ t.rt_comment }} <span class="opt">{{ t.rt_optional }}</span></label>
+    <textarea id="rt-comment" name="comment" maxlength="1000" class="short"></textarea></div>
+  <button class="btn solid block" type="submit">{{ t.rt_send }}</button>
+</form>

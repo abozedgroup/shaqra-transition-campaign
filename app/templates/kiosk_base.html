@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="{{ t.lang }}" dir="{{ t.dir }}" class="kiosk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>{% block title %}{{ t.k_title }}{% endblock %} | {{ t.sitename }}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="/assets/site.css">
+<link rel="stylesheet" href="/app-static/app.css">
+</head>
+<body class="kiosk-body" data-home="{{ kpre or '/kiosk' }}" data-idle="{% block idle %}90{% endblock %}">
+<header class="k-top">
+  <div class="k-top-row">
+    <a class="brand" href="{{ kpre or '/kiosk' }}" aria-label="{{ t.k_title }}">
+      <img src="/assets/health-holding-logo-color.svg" alt="{{ t.logoalt }}">
+      <span class="sep" aria-hidden="true"></span>
+      <span class="name">{{ t.k_title }}<small>{{ t.sitename }}</small></span>
+    </a>
+    {% if switch_url %}<a class="lang" href="{{ switch_url }}" hreflang="{{ t.switch_lang }}" lang="{{ t.switch_lang }}">{{ t.switch_label }}</a>{% endif %}
+  </div>
+</header>
+<main id="main" class="k-main">
+{% block body %}{% endblock %}
+</main>
+<script src="/app-static/kiosk.js"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}أجهزة الاستقبال{% endblock %}
+{% block body %}
+<section class="s adm"><div class="wrap wide">
+  {% set anav='kiosks' %}{% include "_adminnav.html" %}
+  <h1 class="h1s">أجهزة الاستقبال (آيباد أو كمبيوتر عند المدخل)</h1>
+  {% if msg %}<div class="okmsg">{{ msg }}</div>{% endif %}
+  {% if err %}<div class="warn" role="alert">{{ err }}</div>{% endif %}
+  <div class="panel">
+    <h3>تفعيل هذا الجهاز كجهاز استقبال</h3>
+    <ol class="hint">
+      <li>افتح هذه الصفحة <b>على الجهاز نفسه</b> (الآيباد أو الكمبيوتر عند المدخل) بعد الدخول بحساب مشرف عام.</li>
+      <li>اكتب اسمًا للجهاز واضغط «تفعيل». سيُسجَّل خروجك من اللوحة على هذا الجهاز، ويفتح شاشة الاستقبال مباشرة.</li>
+      <li>على الآيباد: من Safari اختر «مشاركة» ثم «إضافة إلى الشاشة الرئيسية»، وفعّل «الوصول الموجّه» (Guided Access) من إعدادات تسهيلات الاستخدام حتى لا يخرج أحد من الشاشة.</li>
+      <li>يبقى الجهاز مفعّلًا نحو سنة ما لم تمسح بيانات المتصفح. يمكنك إيقافه من هنا في أي وقت.</li>
+    </ol>
+    <form method="post" action="/admin/kiosks" class="inline-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="activate">
+      <div class="field"><label for="kname">اسم الجهاز</label><input type="text" id="kname" name="name" maxlength="60" placeholder="آيباد مدخل الإدارة" required></div>
+      <button class="btn solid" type="submit">تفعيل هذا الجهاز</button>
+    </form>
+  </div>
+  <div class="tablewrap"><table class="tbl">
+    <thead><tr><th>الجهاز</th><th>فُعّل</th><th>بواسطة</th><th>آخر استخدام</th><th>التذاكر</th><th>الحالة</th><th></th></tr></thead>
+    <tbody>{% for k in kiosks %}<tr>
+      <td>{{ k.name }}</td><td>{{ k.created_at|dt }}</td><td dir="ltr">{{ k.created_by }}</td><td>{{ k.last_seen|dt if k.last_seen else '—' }}</td>
+      <td>{{ k.n }}</td><td>{{ 'مفعّل' if k.active else 'موقوف' }}</td>
+      <td><form method="post" action="/admin/kiosks"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="id" value="{{ k.id }}">
+        <button class="btn small {{ 'danger' if k.active }}" type="submit" name="action" value="{{ 'disable' if k.active else 'enable' }}">{{ 'إيقاف' if k.active else 'إعادة تفعيل' }}</button></form></td>
+    </tr>{% else %}<tr><td colspan="7" class="center">لا توجد أجهزة مفعّلة.</td></tr>{% endfor %}</tbody></table></div>
+</div></section>
+{% endblock %}

@@ -1,0 +1,13 @@
+{% extends "kiosk_base.html" %}
+{% block idle %}0{% endblock %}
+{% block body %}
+<div class="k-card center">
+  <h1>{{ t.k_welcome }}</h1>
+  <p class="k-lead">{{ t.k_choose }}</p>
+  <div class="k-choices">
+    <a class="k-choice" href="{{ kpre }}/new?type=request"><b>{{ t.k_new_req }}</b><span>{{ t.k_new_req_p }}</span></a>
+    <a class="k-choice" href="{{ kpre }}/new?type=feedback"><b>{{ t.k_new_fb }}</b><span>{{ t.k_new_fb_p }}</span></a>
+    <a class="k-choice rate" href="{{ kpre }}/rate"><b>{{ t.k_rate }}</b><span>{{ t.k_rate_p }}</span></a>
+  </div>
+</div>
+{% endblock %}

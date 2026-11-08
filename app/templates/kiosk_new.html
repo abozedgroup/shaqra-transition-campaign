@@ -1,0 +1,46 @@
+{% extends "kiosk_base.html" %}
+{% macro fld_err(n) %}<span class="err" id="e-{{ n }}">{{ errors[n] if n in errors else err_msgs.get(n, '') }}</span>{% endmacro %}
+{% block title %}{{ t.k_new_h }}{% endblock %}
+{% block idle %}180{% endblock %}
+{% block body %}
+<div class="k-card">
+  <h1>{{ t.k_new_h }}</h1>
+  {% if errors %}<div class="warn errsum" role="alert" id="errsum" tabindex="-1"><b>{{ t.errsum }}</b>
+    <ul>{% for n in err_order if n in errors %}<li><a href="#{{ 'type-first' if n=='req_type' else n }}">{{ errors[n] }}</a></li>{% endfor %}</ul></div>{% endif %}
+  <form class="k-form{% if v.anonymous %} anon{% endif %}" id="kf" method="post" action="{{ kpre }}/new" novalidate data-anon-types="{{ anon_types|join(',') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="field {% if errors.req_type %}bad{% endif %}" id="g-req_type">
+      <span class="legend" id="lg-type">{{ t.lbl_type }}</span>
+      <div class="types" role="radiogroup" aria-labelledby="lg-type">
+        {% for k, lbl, help in types %}<label class="type2"><input type="radio" name="req_type" value="{{ k }}" {% if loop.first %}id="type-first"{% endif %} {% if v.req_type==k %}checked{% endif %}> <span><b>{{ lbl }}</b><small>{{ help }}</small></span></label>{% endfor %}
+      </div>{{ fld_err('req_type') }}
+    </div>
+    <div class="field {% if errors.topic %}bad{% endif %}" id="g-topic"><label for="topic">{{ t.lbl_topic }}</label>
+      <select id="topic" name="topic" required><option value="">{{ t.choose }}</option>{% for k, lbl in topics %}<option value="{{ k }}" {% if v.topic==k %}selected{% endif %}>{{ lbl }}</option>{% endfor %}</select>{{ fld_err('topic') }}</div>
+    <div class="field anonbox" id="anonbox">
+      <label class="chk"><input type="checkbox" name="anonymous" value="1" id="anonymous" {% if v.anonymous %}checked{% endif %}> <span><b>{{ t.anon_lbl }}</b></span></label>
+      <span class="hint">{{ t.anon_hint }}</span>
+    </div>
+    <div class="field {% if errors.message %}bad{% endif %}" id="g-message"><label for="message">{{ t.k_msg }}</label>
+      <textarea id="message" name="message" maxlength="3000" class="short" required>{{ v.message or '' }}</textarea>{{ fld_err('message') }}</div>
+    <div class="note anon-only">{{ t.anon_on }}</div>
+    <div class="k-grid">
+      <div class="field pi {% if errors.name %}bad{% endif %}" id="g-name"><label for="name">{{ t.lbl_name }}</label>
+        <input type="text" id="name" name="name" autocomplete="off" maxlength="80" value="{{ v.name or '' }}">{{ fld_err('name') }}</div>
+      <div class="field pi {% if errors.emp_no %}bad{% endif %}" id="g-emp_no"><label for="emp_no">{{ t.lbl_emp }}</label>
+        <input type="text" id="emp_no" name="emp_no" inputmode="numeric" dir="ltr" class="ltr-field" autocomplete="off" maxlength="10" value="{{ v.emp_no or '' }}">{{ fld_err('emp_no') }}</div>
+      <div class="field pi {% if errors.mobile %}bad{% endif %}" id="g-mobile"><label for="mobile">{{ t.lbl_mobile }}</label>
+        <input type="tel" id="mobile" name="mobile" inputmode="numeric" dir="ltr" class="ltr-field" autocomplete="off" maxlength="10" placeholder="05XXXXXXXX" value="{{ v.mobile or '' }}">{{ fld_err('mobile') }}</div>
+      <div class="field pi {% if errors.email %}bad{% endif %}" id="g-email"><label for="email">{{ t.lbl_email }}</label>
+        <input type="email" id="email" name="email" inputmode="email" dir="ltr" class="ltr-field" autocomplete="off" autocapitalize="off" maxlength="120" placeholder="name@moh.gov.sa" value="{{ v.email or '' }}">{{ fld_err('email') }}</div>
+      <div class="field {% if errors.facility %}bad{% endif %}" id="g-facility"><label for="facility"><span class="pi-inline">{{ t.lbl_facility }}</span><span class="anon-inline">{{ t.lbl_facility_opt }}</span></label>
+        <select id="facility" name="facility"><option value="">{{ t.choose }}</option>{% for k, lbl in facilities %}<option value="{{ k }}" {% if v.facility_key==k %}selected{% endif %}>{{ lbl }}</option>{% endfor %}</select>{{ fld_err('facility') }}</div>
+      <div class="field pi {% if errors.job_cat %}bad{% endif %}" id="g-job_cat"><label for="job_cat">{{ t.lbl_job }}</label>
+        <select id="job_cat" name="job_cat"><option value="">{{ t.choose }}</option>{% for k, lbl in jobs %}<option value="{{ k }}" {% if v.job_key==k %}selected{% endif %}>{{ lbl }}</option>{% endfor %}</select>{{ fld_err('job_cat') }}</div>
+    </div>
+    <div class="field {% if errors.consent %}bad{% endif %}" id="g-consent">
+      <label class="chk"><input type="checkbox" name="consent" value="1" id="consent"> <span>{{ t.consent }}</span></label>{{ fld_err('consent') }}</div>
+    <div class="k-actions"><a class="k-btn ghost" href="{{ kpre }}">{{ t.k_cancel }}</a><button class="k-btn" type="submit">{{ t.k_get_number }}</button></div>
+  </form>
+</div>
+{% endblock %}

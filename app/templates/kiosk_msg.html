@@ -1,0 +1,5 @@
+{% extends "kiosk_base.html" %}
+{% block body %}
+<div class="k-card center"><h1>{{ title }}</h1><p class="k-lead">{{ msg }}</p>
+{% if back %}<a class="k-btn" href="{{ kpre }}">{{ t.k_home }}</a>{% endif %}</div>
+{% endblock %}
