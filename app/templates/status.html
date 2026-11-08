@@ -27,6 +27,33 @@
     {% set staff_ph = photos|selectattr('source','equalto','staff')|list %}{% set my_ph = photos|selectattr('source','equalto','employee')|list %}
     {% if staff_ph %}<p><b>{{ t.st_photos }}</b></p><div class="photos">{% for ph in staff_ph %}<a href="{{ pre }}/status/f/{{ ph.token }}" target="_blank" rel="noopener"><img src="{{ pre }}/status/f/{{ ph.token }}" alt="{{ t.st_photos }} {{ loop.index }}" loading="lazy"></a>{% endfor %}</div>{% endif %}
     {% if my_ph %}<p><b>{{ t.st_my_photos }}</b></p><div class="photos">{% for ph in my_ph %}<a href="{{ pre }}/status/f/{{ ph.token }}" target="_blank" rel="noopener"><img src="{{ pre }}/status/f/{{ ph.token }}" alt="{{ t.st_my_photos }} {{ loop.index }}" loading="lazy"></a>{% endfor %}</div>{% endif %}
+    {% if appt is defined and appt %}
+    <div class="ratebox" id="appt"><h3>{{ t.ap_h }}</h3>
+      <p><span class="badge ap-{{ appt.status }}">{{ appt_st.get(appt.status, appt.status) }}</span></p>
+      {% if appt.slot and appt.kind == 'appointment' and appt.status not in ('requested','cancelled') %}<p class="ap-when"><b>{{ appt.slot|slot }}</b>{% if appt_loc %}<br>{{ t.ap_where }} {{ appt_loc }}{% endif %}</p>{% endif %}
+      {% if appt.staff_note %}<p>{{ t.ap_note }} {{ appt.staff_note }}</p>{% endif %}
+      {% if appt.status == 'checked_in' and appt_pos %}<p class="k-lead">{{ t.ap_pos|format(appt_pos, appt_wait) }}</p>{% endif %}
+      {% if appt.status == 'requested' %}<p class="hint">{{ t.ap_requested_p }}</p>{% endif %}
+      {% if appt.status == 'booked' %}<p class="hint">{{ t.ap_booked_p }}</p>{% endif %}
+      {% if appt.status in ('booked','confirmed','requested','change_requested') %}
+      <form method="post" action="{{ pre }}/status/appt" class="actions">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="ref" value="{{ result.ref }}">
+        {% if appt.status == 'booked' %}<button class="btn solid" name="action" value="confirm">{{ t.ap_confirm }}</button>{% endif %}
+        {% if appt.status in ('booked','confirmed') %}
+        <details class="ap-change"><summary class="btn">{{ t.ap_change }}</summary>
+          <div class="field"><label for="ap-note">{{ t.ap_change_q }}</label><input type="text" id="ap-note" name="note" maxlength="300"></div>
+          <button class="btn" name="action" value="change">{{ t.ap_change_send }}</button></details>{% endif %}
+        <button class="btn danger" name="action" value="cancel" data-confirm-msg="{{ t.ap_cancel_q }}">{{ t.ap_cancel }}</button>
+      </form>{% endif %}
+    </div>
+    {% elif can_request is defined and can_request %}
+    <details class="ratebox" id="appt"><summary><b>{{ t.ap_ask }}</b></summary>
+      <form method="post" action="{{ pre }}/status/appt">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="ref" value="{{ result.ref }}"><input type="hidden" name="action" value="request">
+        <div class="field"><label for="ap-pref">{{ t.ap_pref_l }}</label><input type="text" id="ap-pref" name="note" maxlength="300" placeholder="{{ t.ap_pref_ph }}"></div>
+        <button class="btn solid" type="submit">{{ t.ap_ask_send }}</button>
+      </form></details>
+    {% endif %}
     {% if rated == 'ok' %}<div class="okmsg mt18" role="status"><b>{{ t.rt_thanks }}</b></div>
     {% elif rated == 'reopened' %}<div class="okmsg mt18" role="status"><b>{{ t.rt_reopened }}</b></div>{% endif %}
     {% if result.status == 'resolved' %}

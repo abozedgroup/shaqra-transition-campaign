@@ -151,3 +151,28 @@ div.kpi{cursor:default}
 .k-change{font-size:18px;font-weight:700;color:var(--navy);padding:8px 16px;border:2px solid var(--line);border-radius:12px;text-decoration:none}
 .k-chosen-help{font-size:17px;margin:6px 0 18px}
 .k-code{font-size:22px;letter-spacing:2px}
+/* appointments */
+.ap-requested,.ap-change_requested{background:#fff3cd;color:#6f5200}.ap-booked{background:#e7eefb;color:#23468f}
+.ap-confirmed{background:#dff5ec;color:#05603f}.ap-checked_in{background:#efe6fb;color:#5b2d91}.ap-serving{background:#2a78d6;color:#fff}
+.ap-done{background:#eef0f3;color:#3d4655}.ap-no_show{background:#fde8e6;color:#a8322a}.ap-cancelled{background:#eef0f3;color:#6b7280}
+.slots{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px;margin:10px 0 14px}
+.slots label{display:flex;align-items:center;justify-content:center;border:2px solid var(--line);border-radius:10px;padding:8px 4px;cursor:pointer;font-weight:700;background:#fff}
+.slots input{position:absolute;opacity:0;width:1px;height:1px}
+.slots label:has(input:checked){border-color:var(--blue);background:#e3f0fb}
+.slots label:has(input:focus-visible){outline:3px solid #e0a800;outline-offset:2px}
+.slots label.full{opacity:.45;cursor:not-allowed;text-decoration:line-through}
+.appt-day{margin-bottom:6px}
+.q-now{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+.q-card{border:2px solid var(--line);border-radius:14px;padding:12px 14px;background:#fff}
+.q-card.serving{border-color:#2a78d6;background:#f3f8fe}
+.q-card .big{font-size:28px;font-weight:800;color:var(--navy)}
+.q-card form{margin-top:8px}
+.state-pill{display:inline-block;padding:2px 12px;border-radius:99px;font-weight:700}
+.state-pill.on{background:#dff5ec;color:#05603f}.state-pill.off{background:#fde8e6;color:#a8322a}
+.apptbox{background:var(--soft);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.apptbox.off,.js .apptbox.off{display:none}
+.ap-pref{margin-top:8px}
+.ap-when{font-size:19px}
+.ap-change summary{list-style:none;cursor:pointer}
+.k-choice.appt{background:#eef8f4;border-color:#a7dcc9}
+.k-offer{margin:18px 0 6px;padding-top:16px;border-top:1px solid var(--line)}

@@ -16,6 +16,8 @@
   function syncAnon() {
     var allowed = anonTypes.indexOf(curType()) >= 0;
     if (anonBox) anonBox.classList.toggle('off', !allowed);
+    var ab = document.getElementById('apptbox');
+    if (ab) ab.classList.toggle('off', allowed || !curType());
     f.classList.toggle('anon', isAnon());
     if (isAnon()) Object.keys(personal).forEach(function (n) {
       var g = document.getElementById('g-' + n); if (g) g.classList.remove('bad');

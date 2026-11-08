@@ -1,0 +1,15 @@
+{% extends "kiosk_base.html" %}
+{% block title %}{{ t.k_have_appt }}{% endblock %}
+{% block idle %}90{% endblock %}
+{% block body %}
+<div class="k-card center">
+  <h1>{{ t.k_have_appt }}</h1><p class="k-lead">{{ t.k_rate_find }}</p>
+  {% if error %}<div class="warn" role="alert">{{ error }}</div>{% endif %}
+  <form class="k-form narrowform" method="post" action="{{ kpre }}/checkin" autocomplete="off">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="field"><label for="ref">{{ t.lbl_ref }}</label><input type="text" id="ref" name="ref" inputmode="numeric" dir="ltr" class="ltr-field k-big" maxlength="20" required></div>
+    <div class="field"><label for="key">{{ t.k_last4 }}</label><input type="text" id="key" name="key" inputmode="numeric" dir="ltr" class="ltr-field k-big" maxlength="4" required></div>
+    <div class="k-actions"><a class="k-btn ghost" href="{{ kpre }}">{{ t.k_cancel }}</a><button class="k-btn" type="submit">{{ t.k_ci_send }}</button></div>
+  </form>
+</div>
+{% endblock %}

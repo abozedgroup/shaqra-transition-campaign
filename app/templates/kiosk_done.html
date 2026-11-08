@@ -9,7 +9,24 @@
   {% if anon %}<p class="k-lead">{{ t.dn_code }}</p><p class="k-bignum small" dir="ltr">{{ code[:3] }}-{{ code[3:] }}</p><p>{{ t.dn_code_keep|safe }}</p>
   {% else %}<p class="k-lead">{{ t.k_go_to }} <b>{{ dept }}</b>{{ t.k_go_to2 }}</p><p>{{ t.k_after }}</p>
   <p class="hint">{{ t.k_track_code }} <b dir="ltr" class="k-code">{{ code[:3] }}-{{ code[3:] }}</b></p>{% endif %}
+  {% if w_open is defined %}
+  <div class="k-offer">
+    {% if w_open and not w_busy %}
+      <p class="k-lead">{{ t.k_w_open|format(w_ahead, w_wait) }}</p>
+      <form method="post" action="{{ kpre }}/walkin" class="k-actions"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="k-btn" name="choice" value="wait">{{ t.k_w_wait }}</button>
+        <button class="k-btn ghost" name="choice" value="appt">{{ t.k_w_appt }}</button></form>
+    {% else %}
+      <p class="k-lead">{% if w_busy %}{{ t.k_w_busy|format(w_wait) }}{% elif w_why == 'hours' %}{{ t.k_w_hours }}{% elif w_why == 'weekend' %}{{ t.k_w_weekend }}{% else %}{{ t.k_w_closed }}{% endif %}</p>
+      {% if w_next %}<p>{{ t.k_w_next }} <b>{{ w_next[0] }}</b></p>{% endif %}
+      <form method="post" action="{{ kpre }}/walkin" class="k-actions"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="k-btn" name="choice" value="appt">{{ t.k_w_appt }}</button>
+        {% if w_busy %}<button class="k-btn ghost" name="choice" value="wait">{{ t.k_w_wait_anyway }}</button>{% endif %}</form>
+    {% endif %}
+  </div>
+  {% else %}
   <a class="k-btn" href="{{ kpre }}">{{ t.k_finish }}</a>
+  {% endif %}
   <p class="hint k-countdown" aria-live="off">{{ t.k_auto_back }}</p>
 </div>
 {% endblock %}

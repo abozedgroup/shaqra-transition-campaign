@@ -99,6 +99,7 @@
     </div>
 
     <div>
+      {% include "_appt_panel.html" %}
       {% if tk.status in open_statuses %}
       <form class="panel" method="post" action="/admin/t/{{ tk.ref }}">
         <h3>تصعيد / إحالة إلى قسم</h3>

@@ -1,0 +1,13 @@
+{% extends "kiosk_base.html" %}
+{% block title %}{{ t.k_q_h }}{% endblock %}
+{% block idle %}60{% endblock %}
+{% block body %}
+<div class="k-card center">
+  {% if serving is defined and serving %}<h1 class="ok-h">{{ t.k_q_serving }}</h1>
+  {% else %}<h1 class="ok-h">{{ t.k_q_h }}</h1>
+  <p class="k-lead">{{ t.k_your_no }}</p><p class="k-bignum" dir="ltr">{{ ref }}</p>
+  <p class="k-lead">{{ t.k_q_pos|format(pos) }}{% if wait %} · {{ t.k_q_wait|format(wait) }}{% else %} · {{ t.k_q_soon }}{% endif %}</p>{% endif %}
+  <p>{{ t.k_go_to }} <b>{{ dept }}</b>{% if loc %} – {{ loc }}{% endif %}{{ t.k_q_called }}</p>
+  <a class="k-btn" href="{{ kpre }}">{{ t.k_finish }}</a>
+</div>
+{% endblock %}

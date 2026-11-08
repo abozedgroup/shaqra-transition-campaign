@@ -122,6 +122,9 @@ app.secret_key = _load_secret_key()
 
 
 # ---------------------------------------------------------------- database
+DB_HOOKS = []     # extra migrations registered by add-on modules (appointments.py)
+SWEEP_HOOKS = []  # extra periodic jobs registered by add-on modules
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS tickets(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -269,6 +272,8 @@ def init_db():
             "SELECT id, created_at, status FROM tickets WHERE dept_id IS NULL").fetchall():
         due = add_workdays(created, care[1]) if status in OPEN_STATUSES else ""
         con.execute("UPDATE tickets SET dept_id=?, topic=?, due_at=? WHERE id=?", (care[0], GENERAL_TOPIC, due, tid))
+    for hook in DB_HOOKS:
+        hook(con)
     con.commit()
     con.close()
     try:
@@ -524,6 +529,11 @@ def auto_close(con, force=False):
             log_event(con, tid, "النظام", "autoclose",
                       "لم يقيّم الموظف خلال %d أيام عمل؛ يُعتبر الرد قد وصل." % RATE_WINDOW_DAYS)
     con.commit()
+    for hook in SWEEP_HOOKS:
+        try:
+            hook(con)
+        except Exception:
+            log.exception("sweep hook failed")
     backup_daily()
     return n
 
@@ -649,6 +659,7 @@ def validate_ticket(form, lang="ar", min_msg=10):
     if v["topic"] not in [k for k, _ in topic_opts(lang)]:
         errors["topic"] = ERR["topic"][i]
     v["anonymous"] = form.get("anonymous") == "1" and v["req_type"] in ANON_TYPES
+    v["want_appt"] = form.get("want_appt") == "1"
     v["message"] = clean(form.get("message"), 3000)
     if len(v["message"]) < min_msg:
         errors["message"] = ERR["message"][i]
@@ -858,6 +869,11 @@ def ticket_form():
                 if n >= 5:
                     abort(429)
             ref, code, dept = create_ticket(con, values, lang, photos)
+            if (request.form.get("want_appt") == "1" and not values["anonymous"]
+                    and values["req_type"] == "request"):
+                tk_ = con.execute("SELECT * FROM tickets WHERE ref=?", (ref,)).fetchone()
+                appointments.create_request(con, tk_, request.form.get("appt_pref"), "employee")
+                con.commit()
             session["done_ref"] = ref
             session["done_code"] = code
             session["done_anon"] = bool(values["anonymous"])
@@ -917,6 +933,10 @@ def status_lookup():
         elif row["status"] == "resolved":
             error = T[lang]["rt_missing"]
         result = db().execute(cols + "WHERE id=?", (row["id"],)).fetchone()
+    elif request.method == "GET" and request.args.get("show") == "1":
+        sid = session.get("st_show")
+        if sid and sid in session.get("st_ok", []):
+            result = db().execute(cols + "WHERE id=?", (sid,)).fetchone()
     elif request.method == "POST":
         check_csrf()
         ip = client_ip()
@@ -948,7 +968,12 @@ def status_lookup():
         d = dept_by_id(result["dept_id"])
         if d:
             dept_name = d["name_ar"] if lang == "ar" else d["name_en"]
+    actx = {}
+    if result:
+        session["st_show"] = result["id"]
+        actx = appointments.status_ctx(db(), result, lang)
     return render_template("status.html", result=result, error=error, dept_name=dept_name, photos=photos, rated=rated,
+                           **actx,
                            statuses={k: v[i] for k, v in STATUSES_I18N.items()},
                            types={k: v[i] for k, v in TYPES_I18N.items()})
 
@@ -1007,6 +1032,7 @@ def _kiosk_pre():
 @kiosk_required
 def kiosk_home():
     session.pop("k_rate", None)
+    session.pop("k_walkin", None)
     return render_template("kiosk_home.html", kpre=_kiosk_pre())
 
 
@@ -1033,6 +1059,8 @@ def kiosk_new():
                     abort(429)
             ref, code, dept = create_ticket(con, values, lang, channel="walkin", kiosk=g.kiosk)
             session["k_done"] = [ref, code, dept["name_ar"] if lang == "ar" else dept["name_en"], bool(values["anonymous"])]
+            tk_ = con.execute("SELECT id FROM tickets WHERE ref=?", (ref,)).fetchone()
+            session["k_walkin"] = tk_["id"]
             return redirect(_kiosk_pre() + "/done")
     else:
         t = request.args.get("type", "")
@@ -1055,7 +1083,13 @@ def kiosk_done():
     d = session.pop("k_done", None)
     if not d:
         return redirect(_kiosk_pre())
-    return render_template("kiosk_done.html", ref=d[0], code=d[1], dept=d[2], anon=d[3] if len(d) > 3 else False,
+    offer = {}
+    if session.get("k_walkin"):
+        tk_ = db().execute("SELECT * FROM tickets WHERE id=?", (session["k_walkin"],)).fetchone()
+        offer = appointments.walkin_offer(db(), tk_, g.lang) if tk_ else {}
+        if not offer:
+            session.pop("k_walkin", None)
+    return render_template("kiosk_done.html", ref=d[0], code=d[1], dept=d[2], anon=d[3] if len(d) > 3 else False, **offer,
                            kpre=_kiosk_pre())
 
 
@@ -1377,7 +1411,7 @@ EVENT_KINDS = {"create": "تقديم التذكرة", "status": "تغيير ال
                "note": "ملاحظة داخلية", "escalate": "تصعيد / إحالة", "topic": "تعديل التصنيف",
                "photo": "إرفاق صور", "resolve": "إنهاء وإرسال للتقييم", "rating": "تقييم الموظف",
                "autoclose": "إغلاق تلقائي", "close": "إغلاق دون تقييم", "reopen": "إعادة فتح",
-               "assign": "استلام", "newcode": "رمز متابعة جديد"}
+               "assign": "استلام", "newcode": "رمز متابعة جديد", "appt": "موعد حضوري"}
 
 
 def _load_ticket(ref, u):
@@ -1527,9 +1561,12 @@ def _render_ticket(row, u, err=None):
     ratings = con.execute("SELECT * FROM ratings WHERE ticket_id=? ORDER BY id", (row["id"],)).fetchall()
     assignee = con.execute("SELECT display_name FROM users WHERE id=?", (row["assigned_user_id"],)).fetchone() \
         if row["assigned_user_id"] else None
+    actx = appointments.ticket_panel_ctx(con, row)
+    actx["appt_err"] = session.pop("appt_err", None)
+    actx["appt_done"] = session.pop("appt_done", None)
     nc = session.pop("new_code", None)
     new_code = nc[1] if nc and nc[0] == row["ref"] else ""
-    return render_template("admin_ticket.html", ratings=ratings, new_code=new_code, assignee=assignee, channels=CHANNELS,
+    return render_template("admin_ticket.html", ratings=ratings, new_code=new_code, **actx, assignee=assignee, channels=CHANNELS,
                            close_reasons=CLOSE_REASONS, rate_days=RATE_WINDOW_DAYS, open_statuses=OPEN_STATUSES, tk=row, statuses=STATUSES, types=REQ_TYPES,
                            saved=request.args.get("saved") == "1", err=err, events=events, kinds=EVENT_KINDS,
                            dept_names=dnames, depts=[d for d in depts if d["active"] and d["id"] != row["dept_id"]],
@@ -1885,7 +1922,8 @@ def compute_stats(u, args):
             if x["stars"] <= 2 or not x["resolved"]:
                 low.append((r, x))
     low.sort(key=lambda t: t[1]["at"], reverse=True)
-    return dict(f=f, total=total, by=by, series=series, step=step, low=low[:50],
+    appt = appointments.stats(con, lo, hi, int(f["dept"]) if f["dept"] else (None if is_admin_user(u) else (u["dept_id"] or -1)))
+    return dict(f=f, total=total, by=by, series=series, step=step, low=low[:50], appt=appt,
                 depts=all_depts(), channels=CHANNELS, period_days=days)
 
 
@@ -1993,5 +2031,7 @@ def static_site(p):
         return send_from_directory(SITE_DIR, p, max_age=300)
     abort(404)
 
+
+import appointments  # noqa: E402,F401  (registers its routes and hooks; needs everything above)
 
 init_db()
