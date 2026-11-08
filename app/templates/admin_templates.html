@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}الردود الجاهزة{% endblock %}
+{% macro tform(x=none) %}
+<form method="post" action="/admin/templates{% if back %}?back={{ back }}{% endif %}" class="tpl-form">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% if x %}<input type="hidden" name="id" value="{{ x.id }}">{% endif %}
+  <div class="field"><label>العنوان <span class="opt">(يظهر في القائمة)</span></label><input type="text" name="title" maxlength="80" value="{{ x.title if x else '' }}" required></div>
+  {% if me_admin %}<div class="field"><label>متاح لـ</label><select name="scope"><option value="all" {% if x and not x.dept_id %}selected{% endif %}>كل الأقسام</option>{% for d in depts if d.active %}<option value="{{ d.id }}" {% if x and x.dept_id == d.id %}selected{% endif %}>{{ d.name_ar }}</option>{% endfor %}</select></div>{% endif %}
+  <div class="field"><label>نص الرد</label><textarea name="body" maxlength="3000" required>{{ x.body if x else 'السلام عليكم {الاسم}،\n' }}</textarea></div>
+  <div class="actions"><button class="btn solid" type="submit">حفظ</button>
+    {% if x %}<button class="btn danger" type="submit" name="action" value="delete" formnovalidate>حذف</button>{% endif %}</div>
+</form>
+{% endmacro %}
+{% block body %}
+<section class="s adm dp-page"><div class="wrap wide">
+  {% set anav='tpl' %}{% include "_adminnav.html" %}
+  <header class="tl-head">
+    <h1>الردود الجاهزة <span class="n-plain">({{ rows|length }})</span></h1>
+    <div class="actions">{% if back %}<a class="btn" href="/admin/t/{{ back }}">← العودة للتذكرة {{ back }}</a>{% endif %}<a class="btn solid" href="#add" data-open="add">+ رد جديد</a></div>
+  </header>
+  {% if msg %}<div class="okmsg" role="status">{{ msg }}</div>{% endif %}
+  {% if err %}<div class="warn" role="alert">{{ err }}</div>{% endif %}
+  <div class="next-step" role="note">اكتب الردود التي تتكرر مرة واحدة، ثم أدرجها في أي تذكرة من قائمة «ردود جاهزة» في تبويب الرد، وعدّلها قبل الإرسال إن لزم.
+    يُستبدل <b>{الاسم}</b> باسم الموظف و<b>{رقم_التذكرة}</b> برقم التذكرة تلقائيًا. الأكثر استخدامًا يظهر أولًا.</div>
+  <details class="card add-card" id="add" {% if err %}open{% endif %}><summary class="card-h">رد جاهز جديد</summary>{{ tform() }}</details>
+  <div class="dp-list">
+    {% for x in rows %}
+    <article class="dp-card">
+      <header class="dp-head"><div><h2>{{ x.title }}</h2>
+        <small class="hint">{{ dept_names.get(x.dept_id, '') if x.dept_id else 'لكل الأقسام' }} · استُخدم {{ x.uses }} مرة</small></div>
+        {% if me_admin or x.dept_id == me.dept_id %}<details class="inline-edit dp-edit"><summary>تعديل</summary>{{ tform(x) }}</details>{% endif %}</header>
+      <pre class="tpl-body">{{ x.body }}</pre>
+    </article>
+    {% else %}<p class="ql-empty">لا توجد ردود جاهزة بعد.</p>{% endfor %}
+  </div>
+</div></section>
+{% endblock %}
+{% block scripts %}<script src="/app-static/admin.js"></script>{% endblock %}

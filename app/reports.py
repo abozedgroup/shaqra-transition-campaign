@@ -5,11 +5,13 @@ One workbook per download, with the sheets the user picks: a summary of the indi
 the detailed ticket list, ratings, appointments and the action log. Staff only ever get their own section.
 Imported at the end of app.py."""
 import io
-from datetime import datetime, timedelta, timezone
+import threading
+from datetime import date, datetime, timedelta
 
 from flask import Response, render_template, request
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+from openpyxl.cell import WriteOnlyCell
 from openpyxl.utils import get_column_letter
 
 import app as core
@@ -28,6 +30,8 @@ NAVY, LIGHT, LINE = "1B3A6B", "EAF2FB", "D5DDE8"
 HEAD_FONT = Font(name="Arial", bold=True, color="FFFFFF", size=11)
 BODY_FONT = Font(name="Arial", size=10)
 TITLE_FONT = Font(name="Arial", bold=True, size=14, color=NAVY)
+BOLD_FONT = Font(name="Arial", bold=True, size=10)
+MAX_ROWS = 100000  # per sheet; beyond this the user is asked to pick a shorter period
 HEAD_FILL = PatternFill("solid", fgColor=NAVY)
 ZEBRA = PatternFill("solid", fgColor="F6F9FD")
 THIN = Border(bottom=Side(style="thin", color=LINE))
@@ -37,51 +41,64 @@ DT_FMT, D_FMT, PCT_FMT = "yyyy-mm-dd hh:mm", "yyyy-mm-dd", "0%"
 # ---------------------------------------------------------------- helpers
 def local_dt(iso):
     """Stored UTC ISO string -> naive Riyadh datetime for Excel (None if empty)."""
-    if not iso:
-        return None
-    try:
-        return datetime.strptime(iso, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).astimezone(RIYADH) \
-            .replace(tzinfo=None)
-    except ValueError:
-        return None
+    t = core._ts(iso)
+    return t.astimezone(RIYADH).replace(tzinfo=None) if t else None
 
 
 def local_slot(s):
     return ap.parse_local(s) if s else None
 
 
-def put(ws, row, col, value, fmt=None, bold=False):
-    c = ws.cell(row=row, column=col, value=value)
-    if isinstance(value, str) and value[:1] in ("=", "+", "-", "@"):
+# Workbooks are written in openpyxl's streaming ("write-only") mode: rows go straight to the file instead of
+# building a styled object for every cell, so a two-year report takes seconds and little memory.
+FORMULA_START = ("=", "+", "-", "@")
+
+
+def cell(ws, value, fmt=None, bold=False, head=False):
+    c = WriteOnlyCell(ws, value=value)
+    if isinstance(value, str) and value[:1] in FORMULA_START:
         c.data_type = "s"  # text that looks like a formula stays text (no formula injection)
-    c.font = Font(name="Arial", size=10, bold=bold)
+    if head:
+        c.font, c.fill, c.alignment = HEAD_FONT, HEAD_FILL, Alignment(horizontal="center", vertical="center", wrap_text=True)
+    elif bold:
+        c.font = BOLD_FONT
     if fmt:
         c.number_format = fmt
     return c
 
 
-def table(ws, start_row, headers, rows, widths=None, formats=None):
-    """Header row + data rows, styled, with filter and frozen header. Returns next free row."""
-    for j, h in enumerate(headers, 1):
-        c = ws.cell(row=start_row, column=j, value=h)
-        c.font, c.fill = HEAD_FONT, HEAD_FILL
-        c.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-    ws.row_dimensions[start_row].height = 30
+def plain(ws, value, fmt=None):
+    """Cheap path for the bulk of the data: only wrap values that need it."""
+    if isinstance(value, date) and not isinstance(value, datetime):
+        return cell(ws, value, D_FMT)  # anonymous tickets carry a date only
+    if fmt or (isinstance(value, str) and value[:1] in FORMULA_START):
+        return cell(ws, value, fmt)
+    return value
+
+
+def table(ws, headers, rows, widths=None, formats=None, first=True):
+    """Header + rows, with a filter and a frozen header when the table starts the sheet."""
     formats = formats or {}
-    for i, r in enumerate(rows, 1):
-        for j, v in enumerate(r, 1):
-            c = put(ws, start_row + i, j, v, formats.get(j))
-            c.border = THIN
-            c.alignment = Alignment(vertical="top", wrap_text=isinstance(v, str) and len(v) > 40)
-            if i % 2 == 0:
-                c.fill = ZEBRA
-    end = start_row + len(rows)
-    if rows:
-        ws.auto_filter.ref = "A%d:%s%d" % (start_row, get_column_letter(len(headers)), end)
-    ws.freeze_panes = ws.cell(row=start_row + 1, column=1)
-    for j, w in enumerate(widths or [], 1):
-        ws.column_dimensions[get_column_letter(j)].width = w
-    return end + 2
+    if first:
+        for j, w in enumerate(widths or [], 1):
+            ws.column_dimensions[get_column_letter(j)].width = w
+        ws.freeze_panes = "A2"
+    start = getattr(ws, "_shq_row", 0) + 1
+    ws.append([cell(ws, h, head=True) for h in headers])
+    n = 0
+    for r in rows:
+        ws.append([plain(ws, v, formats.get(j)) for j, v in enumerate(r, 1)])
+        n += 1
+    if first and n:
+        ws.auto_filter.ref = "A%d:%s%d" % (start, get_column_letter(len(headers)), start + n)
+    ws._shq_row = start + n
+    return n
+
+
+def line(ws, *values, bold=False):
+    ws.append([cell(ws, v, DT_FMT if isinstance(v, datetime) else None, bold=bold and i == 0) if v is not None else None
+               for i, v in enumerate(values)])
+    ws._shq_row = getattr(ws, "_shq_row", 0) + 1
 
 
 def new_sheet(wb, title):
@@ -130,18 +147,18 @@ BREAK_FMT = {7: PCT_FMT, 13: PCT_FMT, 15: PCT_FMT, 8: "0.0", 9: "0.0", 12: "0.00
 
 
 def sheet_summary(wb, s, u, scope_label):
-    ws = wb.active
-    ws.title = "الملخص"
-    ws.sheet_view.rightToLeft = True
+    ws = new_sheet(wb, "الملخص")
     T, A = s["total"], s["appt"]
-    ws["A1"] = "تقرير مؤشرات طلبات الموظفين – نطاق شقراء الصحي"
-    ws["A1"].font = TITLE_FONT
-    meta = [("الفترة", "%s إلى %s (%s)" % (s["f"]["from"], s["f"]["to"], core.days_ar(s["period_days"]))),
-            ("النطاق", scope_label), ("أُعدّ بواسطة", u["display_name"]),
-            ("تاريخ الإعداد", datetime.now(RIYADH).replace(tzinfo=None))]
-    for i, (k, v) in enumerate(meta, 3):
-        put(ws, i, 1, k, bold=True)
-        put(ws, i, 2, v, DT_FMT if isinstance(v, datetime) else None)
+    ws.column_dimensions["A"].width, ws.column_dimensions["B"].width, ws.column_dimensions["C"].width = 34, 24, 12
+    t = WriteOnlyCell(ws, value="تقرير مؤشرات طلبات الموظفين – نطاق شقراء الصحي")
+    t.font = TITLE_FONT
+    ws.append([t])
+    ws.append([])
+    line(ws, "الفترة", "%s إلى %s (%s)" % (s["f"]["from"], s["f"]["to"], core.days_ar(s["period_days"])), bold=True)
+    line(ws, "النطاق", scope_label, bold=True)
+    line(ws, "أُعدّ بواسطة", u["display_name"], bold=True)
+    line(ws, "تاريخ الإعداد", datetime.now(RIYADH).replace(tzinfo=None, microsecond=0), bold=True)
+    ws.append([])
     pct = lambda v: (v / 100.0) if v is not None else None
     rnd = lambda v, k=1: round(v, k) if v is not None else None
     kpis = [
@@ -158,30 +175,32 @@ def sheet_summary(wb, s, u, scope_label):
         ("نسبة عدم الحضور", pct(A["no_show_pct"]), PCT_FMT), ("حضوري بدون موعد", A["walkins"], None),
         ("متوسط الانتظار (دقيقة)", A["wait"], None), ("متوسط مدة الخدمة (دقيقة)", A["service"], None),
     ]
-    nxt = table(ws, 8, ["المؤشر", "القيمة"], [(k, v) for k, v, _ in kpis], widths=[34, 22])
-    for i, (_, _, f) in enumerate(kpis, 9):
-        if f:
-            ws.cell(row=i, column=2).number_format = f
-    put(ws, nxt, 1, "التذاكر المستلمة والمغلقة %s" % ("أسبوعيًا" if s["step"] == 7 else "يوميًا"), bold=True)
-    table(ws, nxt + 1, ["التاريخ", "المستلمة", "المغلقة"], [(l, a, b) for l, a, b in s["series"]])
-    ws.freeze_panes = None
+    ws.append([cell(ws, "المؤشر", head=True), cell(ws, "القيمة", head=True)])
+    for k, v, f in kpis:
+        ws.append([k, cell(ws, v, f) if f else v])
+    ws.append([])
+    ws.append([cell(ws, "التذاكر المستلمة والمغلقة %s" % ("أسبوعيًا" if s["step"] == 7 else "يوميًا"), bold=True)])
+    ws.append([cell(ws, h, head=True) for h in ("التاريخ", "المستلمة", "المغلقة")])
+    for l, a, b in s["series"]:
+        ws.append([l, a, b])
     titles = [("dept", "حسب القسم", "القسم"), ("staff", "حسب الموظف", "الموظف المسؤول"), ("topic", "حسب الموضوع", "الموضوع"),
               ("type", "حسب النوع", "النوع"), ("channel", "حسب القناة", "القناة"), ("facility", "حسب المنشأة", "المنشأة")]
     for key, title, label in titles:
         if key == "dept" and not is_admin_user(u):
             continue
         w2 = new_sheet(wb, title)
-        table(w2, 1, [label] + BREAK_HEAD[1:], [_brow(n, x) for n, x in s["by"][key]],
-              widths=[30] + [13] * 15, formats=BREAK_FMT)
+        table(w2, [label] + BREAK_HEAD[1:], [_brow(n, x) for n, x in s["by"][key]], widths=[30] + [13] * 15,
+              formats=BREAK_FMT)
 
 
 def sheet_tickets(wb, sql, params):
     con = db()
-    rows = con.execute("SELECT * FROM tickets" + sql + " ORDER BY id", params).fetchall()
+    rows = con.execute("SELECT * FROM tickets" + sql + " ORDER BY id LIMIT ?", params + [MAX_ROWS]).fetchall()
     dn = {d["id"]: d["name_ar"] for d in all_depts()}
     tn = core._topic_names()
     users = {r[0]: r[1] for r in con.execute("SELECT id, display_name FROM users")}
-    esc = {r[0] for r in con.execute("SELECT DISTINCT ticket_id FROM events WHERE kind='escalate'")}
+    esc = {r[0] for r in con.execute("SELECT DISTINCT ticket_id FROM events WHERE kind='escalate' AND ticket_id IN "
+                                     "(SELECT id FROM tickets" + sql + ")", params)}
     now = core.now_utc()
     out = []
     for r in rows:
@@ -193,7 +212,7 @@ def sheet_tickets(wb, sql, params):
         out.append([
             r["ref"], created.date() if (anon and created) else created, STATUSES.get(r["status"], r["status"]),
             REQ_TYPES.get(r["req_type"], r["req_type"]), tn.get(r["topic"], r["topic"]), dn.get(r["dept_id"], ""),
-            CHANNELS.get(r["channel"], r["channel"]), "نعم" if anon else "", r["name"], r["emp_no"], r["mobile"],
+            "" if anon else CHANNELS.get(r["channel"], r["channel"]), "نعم" if anon else "", r["name"], r["emp_no"], r["mobile"],
             r["email"], r["facility"], r["job_cat"], users.get(r["assigned_user_id"], ""), local_dt(r["due_at"]),
             "نعم" if late or r["sla_breached"] else "", local_dt(r["first_response_at"]), local_dt(r["resolved_at"]),
             local_dt(r["closed_at"]), CLOSE_REASONS.get(r["close_reason"], "") if r["status"] == "closed" else "",
@@ -205,11 +224,8 @@ def sheet_tickets(wb, sql, params):
             "تأخرت عن المهلة", "أول رد", "تاريخ الرد النهائي", "تاريخ الإغلاق", "طريقة الإغلاق", "التقييم",
             "مدة الإنجاز (ساعة)", "صُعّدت", "نص الطلب", "الرد"]
     fm = {2: DT_FMT, 16: DT_FMT, 18: DT_FMT, 19: DT_FMT, 20: DT_FMT, 23: "0.0"}
-    table(ws, 1, head, out, widths=[11, 17, 20, 22, 20, 22, 10, 9, 22, 12, 13, 26, 24, 16, 20, 17, 10, 17, 17, 17,
-                                    20, 8, 11, 8, 60, 60], formats=fm)
-    for i, r in enumerate(out, 2):  # anonymous tickets carry a date only
-        if r[1] is not None and not isinstance(r[1], datetime):
-            ws.cell(row=i, column=2).number_format = D_FMT
+    table(ws, head, out, widths=[11, 17, 20, 22, 20, 22, 10, 9, 22, 12, 13, 26, 24, 16, 20, 17, 10, 17, 17, 17,
+                                 20, 8, 11, 8, 60, 60], formats=fm)
     return len(out)
 
 
@@ -220,11 +236,14 @@ def sheet_ratings(wb, sql, params):
     dn = {d["id"]: d["name_ar"] for d in all_depts()}
     tn = core._topic_names()
     users = {r[0]: r[1] for r in con.execute("SELECT id, display_name FROM users")}
-    out = [[r["ref"], local_dt(r["at"]), r["stars"], "نعم" if r["resolved"] else "لا", r["comment"],
-            "جهاز الاستقبال" if r["via"] == "kiosk" else "إلكتروني", dn.get(r["dept_id"], ""),
+    def when(r):
+        t = local_dt(r["at"])
+        return t.date() if (t and r["anonymous"]) else t  # anonymous: date only, no device
+    out = [[r["ref"], when(r), r["stars"], "نعم" if r["resolved"] else "لا", r["comment"],
+            "" if r["anonymous"] else ("جهاز الاستقبال" if r["via"] == "kiosk" else "إلكتروني"), dn.get(r["dept_id"], ""),
             users.get(r["user_id"], ""), tn.get(r["topic"], ""), "مجهول" if r["anonymous"] else r["name"]] for r in rows]
     ws = new_sheet(wb, "التقييمات")
-    table(ws, 1, ["رقم التذكرة", "تاريخ التقييم", "التقييم (من 5)", "تم حل الطلب", "التعليق", "طريقة التقييم", "القسم",
+    table(ws, ["رقم التذكرة", "تاريخ التقييم", "التقييم (من 5)", "تم حل الطلب", "التعليق", "طريقة التقييم", "القسم",
                   "الموظف المسؤول", "الموضوع", "مقدّم الطلب"], out, widths=[11, 17, 11, 11, 50, 14, 22, 20, 20, 22],
           formats={2: DT_FMT})
     return len(out)
@@ -246,7 +265,7 @@ def sheet_appts(wb, sql, params):
             mins(r["checked_in_at"], r["called_at"]), mins(r["called_at"], r["done_at"]), users.get(r["served_by"], ""),
             r["emp_note"], r["staff_note"]] for r in rows]
     ws = new_sheet(wb, "المواعيد")
-    table(ws, 1, ["رقم التذكرة", "الاسم", "الجوال", "النوع", "الحالة", "الموعد", "القسم", "وصل", "استُدعي", "انتهت",
+    table(ws, ["رقم التذكرة", "الاسم", "الجوال", "النوع", "الحالة", "الموعد", "القسم", "وصل", "استُدعي", "انتهت",
                   "الانتظار (دقيقة)", "مدة الخدمة (دقيقة)", "خدمه", "رغبة الموظف", "تعليمات القسم"], out,
           widths=[11, 22, 13, 11, 22, 17, 22, 17, 17, 17, 11, 11, 20, 30, 30],
           formats={6: DT_FMT, 8: DT_FMT, 9: DT_FMT, 10: DT_FMT})
@@ -256,7 +275,8 @@ def sheet_appts(wb, sql, params):
 def sheet_events(wb, sql, params):
     con = db()
     rows = con.execute("SELECT e.*, t.ref, t.anonymous FROM events e JOIN tickets t ON t.id=e.ticket_id "
-                       "WHERE e.ticket_id IN (SELECT id FROM tickets" + sql + ") ORDER BY e.ticket_id, e.id", params).fetchall()
+                       "WHERE e.ticket_id IN (SELECT id FROM tickets" + sql + ") ORDER BY e.ticket_id, e.id LIMIT ?",
+                       params + [MAX_ROWS * 4]).fetchall()
     dn = {d["id"]: d["name_ar"] for d in all_depts()}
     out = []
     for r in rows:
@@ -265,7 +285,7 @@ def sheet_events(wb, sql, params):
         out.append([r["ref"], at.date() if (hide and at) else at, r["actor"], core.EVENT_KINDS.get(r["kind"], r["kind"]),
                     dn.get(r["from_dept"], ""), dn.get(r["to_dept"], ""), r["text"]])
     ws = new_sheet(wb, "سجل الإجراءات")
-    table(ws, 1, ["رقم التذكرة", "الوقت", "بواسطة", "الإجراء", "من قسم", "إلى قسم", "التفاصيل"], out,
+    table(ws, ["رقم التذكرة", "الوقت", "بواسطة", "الإجراء", "من قسم", "إلى قسم", "التفاصيل"], out,
           widths=[11, 17, 28, 20, 22, 22, 70], formats={2: DT_FMT})
     return len(out)
 
@@ -294,17 +314,28 @@ def admin_reports_xlsx():
         d = core.dept_by_id(u["dept_id"]) if u["dept_id"] else None
         dept_name = d["name_ar"] if d else ""
     scope_label = (dept_name or "كل الأقسام") + ((" – " + CHANNELS[s["f"]["channel"]]) if s["f"]["channel"] else "")
-    wb = Workbook()
+    if not _report_lock.acquire(blocking=False):
+        return render_template("msg.html", title="يُجهَّز تقرير آخر الآن",
+                               msg="يُعدّ النظام تقريرًا آخر في هذه اللحظة. انتظر دقيقة ثم أعد المحاولة."), 429
+    try:
+        return _build(u, s, sql, params, open_only, picked, scope_label)
+    finally:
+        _report_lock.release()
+
+
+_report_lock = threading.Lock()  # one report at a time: building one is CPU work that would slow everyone else
+
+
+def _build(u, s, sql, params, open_only, picked, scope_label):
+    wb = Workbook(write_only=True)
     if "summary" in picked:
         sheet_summary(wb, s, u, scope_label)
     else:
-        ws = wb.active
-        ws.title = "عن التقرير"
-        ws.sheet_view.rightToLeft = True
-        put(ws, 1, 1, "تقرير طلبات الموظفين – %s" % scope_label, bold=True)
-        put(ws, 2, 1, ("التذاكر المفتوحة حتى %s" % datetime.now(RIYADH).strftime("%Y-%m-%d %H:%M")) if open_only
-            else "الفترة: %s إلى %s" % (s["f"]["from"], s["f"]["to"]))
-        ws.column_dimensions["A"].width = 60
+        ws = new_sheet(wb, "عن التقرير")
+        ws.column_dimensions["A"].width = 70
+        line(ws, "تقرير طلبات الموظفين – %s" % scope_label, bold=True)
+        line(ws, ("التذاكر المفتوحة حتى %s" % datetime.now(RIYADH).strftime("%Y-%m-%d %H:%M")) if open_only
+             else "الفترة: %s إلى %s" % (s["f"]["from"], s["f"]["to"]))
     if "tickets" in picked:
         sheet_tickets(wb, sql, params)
     if "ratings" in picked:

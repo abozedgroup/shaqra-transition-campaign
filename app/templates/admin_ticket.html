@@ -19,6 +19,7 @@
       {% if tk.channel == 'walkin' and not tk.anonymous %}<span class="badge ch-walkin">حضوري</span>{% endif %}
       {% if tk.anonymous %}<span class="anon-tag">مجهول</span>{% endif %}
     </div>
+    {% if next_tk %}<a class="btn tk-next" href="/admin/t/{{ next_tk.ref }}" title="أكثر تذكرة إلحاحًا بعد هذه">التالية: <b dir="ltr">{{ next_tk.ref }}</b> ←</a>{% endif %}
     <div class="tk-meta">
       <span><b>القسم:</b> {{ dept_names.get(tk.dept_id, '—') }}</span>
       <span><b>المسؤول:</b> {{ assignee.display_name if assignee else 'لم يُستلم بعد' }}
@@ -31,7 +32,10 @@
   </header>
 
   {% if new_code %}<div class="okmsg" role="status">رمز المتابعة الجديد: <b dir="ltr" class="k-code">{{ new_code[:3] }}-{{ new_code[3:] }}</b> – أبلغه للموظف الآن؛ لن يظهر مرة أخرى، وأُلغي الرمز السابق.</div>{% endif %}
-  {% if saved and not appt_done %}<div class="okmsg" role="status"><b>تم الحفظ.</b></div>{% endif %}
+  {% if done_msg %}<div class="okmsg done-next" role="status"><b>{{ done_msg }}</b>
+    {% if next_tk %}<a class="btn solid" href="/admin/t/{{ next_tk.ref }}">انتقل للتذكرة التالية: <span dir="ltr">{{ next_tk.ref }}</span>{% if not next_tk.anonymous %} – {{ next_tk.name }}{% endif %} ←</a>
+    {% else %}<span>لا توجد تذاكر أخرى تحتاج عملًا الآن. 👍</span> <a href="/admin">العودة للقائمة</a>{% endif %}</div>
+  {% elif saved and not appt_done %}<div class="okmsg" role="status"><b>تم الحفظ.</b></div>{% endif %}
   {% if err %}<div class="warn" role="alert">{{ err }}</div>{% endif %}
 
   {# ---------- what to do next ---------- #}
@@ -71,8 +75,18 @@
         <div class="pane" role="tabpanel" id="pane-reply" aria-labelledby="tab-reply" {% if tab0 != 'reply' %}data-hidden{% endif %}>
           <form method="post" action="/admin/t/{{ tk.ref }}" enctype="multipart/form-data">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="tpl_used" id="tpl_used" value="">
+            <div class="tpl-row">
+              <label for="tpl">ردود جاهزة</label>
+              <select id="tpl" data-name="{{ '' if tk.anonymous else tk.name }}" data-ref="{{ tk.ref }}">
+                <option value="">اختر ردًا جاهزًا لإدراجه…</option>
+                {% for x in templates %}<option value="{{ x.id }}" data-body="{{ x.body }}">{{ x.title }}{% if x.dept_id %} · {{ dept_names.get(x.dept_id, '') }}{% endif %}</option>{% endfor %}
+              </select>
+              <a class="small-link" href="/admin/templates?back={{ tk.ref }}">إدارة الردود الجاهزة</a>
+            </div>
             <div class="field"><label for="reply">الرد <span class="opt">(يظهر للموظف في صفحة «متابعة طلبي»)</span></label>
-              <textarea id="reply" name="reply" maxlength="3000">{{ tk.reply }}</textarea></div>
+              <textarea id="reply" name="reply" maxlength="3000" data-draft="reply-{{ tk.ref }}">{{ tk.reply }}</textarea>
+              <small class="hint draft-note" hidden>استُعيدت مسودة لم تُرسل.</small></div>
             {% set st_ph = photos|selectattr('source','equalto','staff')|list %}
             {% if st_ph %}<p class="hint">صور مرفقة مع الرد:</p><div class="photos">{% for ph in st_ph %}<a href="/admin/f/{{ ph.token }}" target="_blank" rel="noopener"><img src="/admin/f/{{ ph.token }}" alt="مرفق الرد {{ loop.index }}" loading="lazy"></a>{% endfor %}</div>{% endif %}
             <details class="attach"><summary>إرفاق صور مع الرد <span class="opt">(اختياري)</span></summary>
@@ -137,7 +151,7 @@
         <details class="attach note-add"><summary>+ إضافة ملاحظة داخلية <span class="opt">(لا تظهر للموظف)</span></summary>
           <form method="post" action="/admin/t/{{ tk.ref }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="note">
-            <div class="field"><textarea id="note" name="note" maxlength="3000" class="short" aria-label="الملاحظة الداخلية"></textarea></div>
+            <div class="field"><textarea id="note" name="note" maxlength="3000" class="short" aria-label="الملاحظة الداخلية" data-draft="note-{{ tk.ref }}"></textarea></div>
             <button class="btn" type="submit">إضافة الملاحظة</button>
           </form></details>
         <ol class="timeline">
@@ -192,7 +206,7 @@
       <section class="card o-rate">
         <h2 class="card-h">تقييم الموظف</h2>
         {% for r in ratings %}<div class="rating-row"><span class="stars-txt" aria-label="{{ r.stars }} من 5">{% for n in range(5) %}{{ '★' if n < r.stars else '☆' }}{% endfor %}</span>
-          <b>{{ r.stars }}/5</b> · {{ 'تم حل الطلب' if r.resolved else 'لم يُحل الطلب' }}<br><small class="hint">{{ r.at|dt }} · {{ 'جهاز الاستقبال' if r.via=='kiosk' else 'إلكتروني' }}</small>
+          <b>{{ r.stars }}/5</b> · {{ 'تم حل الطلب' if r.resolved else 'لم يُحل الطلب' }}<br><small class="hint">{% if tk.anonymous %}{{ r.at|day }}{% else %}{{ r.at|dt }} · {{ 'جهاز الاستقبال' if r.via=='kiosk' else 'إلكتروني' }}{% endif %}</small>
           {% if r.comment %}<div class="txt">{{ r.comment }}</div>{% endif %}</div>{% endfor %}
       </section>
       {% endif %}

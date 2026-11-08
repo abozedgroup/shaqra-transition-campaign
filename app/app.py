@@ -76,6 +76,14 @@ SEED_DEPTS = [
     ("ohs", "الصحة والسلامة المهنية", "Occupational health and safety", 3, 1),
 ]
 GENERAL_TOPIC = "general"
+# starting set of ready-made replies (sections edit or add their own from the dashboard)
+SEED_TEMPLATES = [
+    ("استلام الطلب وجارٍ العمل عليه", "السلام عليكم {الاسم}،\nاستلمنا طلبك رقم {رقم_التذكرة} ونعمل عليه حاليًا، وسنوافيك بالنتيجة في أقرب وقت."),
+    ("تم تنفيذ الطلب", "السلام عليكم {الاسم}،\nتم تنفيذ طلبك رقم {رقم_التذكرة}. نأمل أن تكون الخدمة قد نالت رضاك، ويسعدنا تقييمها."),
+    ("نحتاج مستندًا إضافيًا", "السلام عليكم {الاسم}،\nلإكمال طلبك رقم {رقم_التذكرة} نحتاج إلى: ...\nيمكنك إرساله بالرد على بريد القسم أو إحضاره حضوريًا."),
+    ("الطلب من اختصاص جهة أخرى", "السلام عليكم {الاسم}،\nطلبك رقم {رقم_التذكرة} من اختصاص ...، ويمكنك التواصل معهم عبر ..."),
+    ("شكر على الملاحظة أو الاقتراح", "شكرًا لملاحظتك. وصلت إلى الجهة المختصة وستؤخذ في الاعتبار لتحسين الخدمة."),
+]
 
 EMAIL_RE = re.compile(r"^[a-z0-9][a-z0-9._%+\-]{0,63}@moh\.gov\.sa$")
 MOBILE_RE = re.compile(r"^05\d{8}$")
@@ -123,6 +131,7 @@ app.secret_key = _load_secret_key()
 
 # ---------------------------------------------------------------- database
 DB_HOOKS = []     # extra migrations registered by add-on modules (appointments.py)
+APPT_FOLLOW = None  # appointments.follow_ticket: keeps a live appointment in step with its ticket
 SWEEP_HOOKS = []  # extra periodic jobs registered by add-on modules
 
 SCHEMA = """
@@ -200,6 +209,16 @@ CREATE TABLE IF NOT EXISTS ratings(
   user_id INTEGER
 );
 CREATE INDEX IF NOT EXISTS ix_r_ticket ON ratings(ticket_id);
+CREATE TABLE IF NOT EXISTS reply_templates(
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  dept_id INTEGER,                 -- NULL: available to every section
+  title TEXT NOT NULL,
+  body TEXT NOT NULL,
+  active INTEGER NOT NULL DEFAULT 1,
+  uses INTEGER NOT NULL DEFAULT 0,
+  created_by TEXT NOT NULL DEFAULT '',
+  updated_at TEXT NOT NULL DEFAULT ''
+);
 CREATE TABLE IF NOT EXISTS counters(
   name TEXT PRIMARY KEY,
   value INTEGER NOT NULL
@@ -245,11 +264,18 @@ def init_db():
         if name not in cols:
             con.execute("ALTER TABLE tickets ADD COLUMN %s %s" % (name, decl))
     con.execute("CREATE INDEX IF NOT EXISTS ix_t_dept ON tickets(dept_id)")
+    if not con.execute("SELECT 1 FROM reply_templates LIMIT 1").fetchone():
+        for title, body in SEED_TEMPLATES:
+            con.execute("INSERT INTO reply_templates(dept_id,title,body,created_by,updated_at) VALUES(NULL,?,?,?,?)",
+                        (title, body, "النظام", now_utc()))
     if not con.execute("SELECT 1 FROM counters WHERE name='ticket_ref'").fetchone():
         last = con.execute("SELECT MAX(CAST(ref AS INTEGER)) FROM tickets WHERE ref NOT LIKE 'SHQ-%'").fetchone()[0]
         con.execute("INSERT INTO counters(name,value) VALUES('ticket_ref',?)", (max(FIRST_REF - 1, last or 0),))
     # anonymous tickets keep nothing that could point to the person (device, language)
     con.execute("UPDATE tickets SET kiosk_id=NULL, lang='' WHERE anonymous=1 AND (kiosk_id IS NOT NULL OR lang<>'')")
+    for tid, due in con.execute("SELECT id, due_at FROM tickets WHERE anonymous=1 AND due_at<>''").fetchall():
+        if day_end(due) != due:
+            con.execute("UPDATE tickets SET due_at=? WHERE id=?", (day_end(due), tid))
     con.execute("UPDATE events SET actor='مقدّم مجهول' WHERE actor LIKE 'الموظف (جهاز الاستقبال%' "
                 "AND ticket_id IN (SELECT id FROM tickets WHERE anonymous=1)")
     cols_u = [r[1] for r in con.execute("PRAGMA table_info(users)")]
@@ -280,6 +306,12 @@ def init_db():
         os.chmod(DB_PATH, 0o600)
     except OSError:
         pass
+
+
+def day_end(iso):
+    """Same day, 23:59 Riyadh time: deadlines of anonymous tickets keep no clock time that could date the visit."""
+    t = datetime.strptime(iso, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).astimezone(RIYADH)
+    return t.replace(hour=23, minute=59, second=0).astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def add_workdays(start_iso, days):
@@ -528,6 +560,8 @@ def auto_close(con, force=False):
             n += 1
             log_event(con, tid, "النظام", "autoclose",
                       "لم يقيّم الموظف خلال %d أيام عمل؛ يُعتبر الرد قد وصل." % RATE_WINDOW_DAYS)
+            if APPT_FOLLOW:
+                APPT_FOLLOW(con, tid, "close")
     con.commit()
     for hook in SWEEP_HOOKS:
         try:
@@ -558,7 +592,7 @@ def save_rating(con, row, stars, resolved, comment, via):
         d = dept_by_id(row["dept_id"])
         cur = con.execute("UPDATE tickets SET status='in_progress', rating=?, rate_due_at='', resolved_at='', "
                           "due_at=?, updated_at=?, sla_breached=MAX(sla_breached, ?) WHERE id=? AND status='resolved'",
-                          (stars, add_workdays(ts, d["sla_days"] if d else 3), ts,
+                          (stars, (day_end if row["anonymous"] else str)(add_workdays(ts, d["sla_days"] if d else 3)), ts,
                            1 if row["resolved_at"] and row["due_at"] and row["resolved_at"] > row["due_at"] else 0,
                            row["id"]))
     if cur.rowcount != 1:
@@ -572,6 +606,8 @@ def save_rating(con, row, stars, resolved, comment, via):
               "rating", txt)
     if not resolved:
         log_event(con, row["id"], "النظام", "reopen", "أُعيدت التذكرة للقسم لأن الموظف أفاد بأن طلبه لم يُحل.")
+    elif APPT_FOLLOW:
+        APPT_FOLLOW(con, row["id"], "close")
     con.commit()
     return True
 
@@ -728,7 +764,7 @@ def create_ticket(con, values, lang, photos=(), channel="online", kiosk=None):
              values["facility"], values["job_cat"], values["req_type"], values["message"],
              "" if anon else lang,  # the language could point to a person: not kept for anonymous tickets
              values["topic"], dept["id"], 1 if anon else 0, follow_hash(ref, code),
-             add_workdays(ts, dept["sla_days"]), channel,
+             day_end(add_workdays(ts, dept["sla_days"])) if anon else add_workdays(ts, dept["sla_days"]), channel,
              None if anon or not kiosk else kiosk["id"]))
         store_photos(con, cur.lastrowid, photos, "employee")
         if anon:
@@ -1216,7 +1252,19 @@ def inject_staff():
     if not request.path.startswith("/admin"):
         return {}
     u = current_user()
-    return dict(me=u, me_admin=is_admin_user(u), roles=ROLES)
+    if not u:
+        return dict(me=u, me_admin=False, roles=ROLES)
+    con = db()
+    vw, va = _visible(u)
+    n_act = con.execute("SELECT COUNT(*) FROM tickets WHERE " + " AND ".join(vw + ["status IN ('new','escalated')"]),
+                        va).fetchone()[0]
+    today = datetime.now(RIYADH).strftime("%Y-%m-%d")
+    qw = ["a.status='checked_in'", "a.checked_in_at LIKE ?"]
+    qa = [today + "%"]
+    if not is_admin_user(u):
+        qw.append("a.dept_id=?"); qa.append(u["dept_id"] or -1)
+    n_wait = con.execute("SELECT COUNT(*) FROM appointments a WHERE " + " AND ".join(qw), qa).fetchone()[0]
+    return dict(me=u, me_admin=is_admin_user(u), roles=ROLES, nav_act=n_act, nav_wait=n_wait)
 
 
 @app.route("/admin/login", methods=["GET", "POST"])
@@ -1494,7 +1542,12 @@ def admin_ticket(ref):
                 sets.append("status=?"); vals.append("in_progress")
                 log_event(con, row["id"], actor, "status", "قيد المعالجة")
             con.execute("UPDATE tickets SET " + ", ".join(sets) + " WHERE id=?", vals + [row["id"]])
+            tpl = as_id(request.form.get("tpl_used"))
+            if tpl:
+                con.execute("UPDATE reply_templates SET uses=uses+1 WHERE id=?", (tpl,))
             con.commit()
+            if action == "resolve":
+                session["done_msg"] = "أُرسل الرد للموظف لتقييمه."
             return redirect(url_for("admin_ticket", ref=ref, saved=1))
         if action == "close":
             reason = clean(request.form.get("close_note"), 1000)
@@ -1506,7 +1559,10 @@ def admin_ticket(ref):
                         "assigned_user_id=COALESCE(assigned_user_id, ?) WHERE id=?",
                         (ts, ts, u["id"] or None, row["id"]))
             log_event(con, row["id"], actor, "close", reason)
+            if APPT_FOLLOW:
+                APPT_FOLLOW(con, row["id"], "close", actor=actor)
             con.commit()
+            session["done_msg"] = "أُغلقت التذكرة."
             return redirect(url_for("admin_ticket", ref=ref, saved=1))
         if action == "reopen":
             if row["status"] not in ("resolved", "closed"):
@@ -1561,6 +1617,8 @@ def admin_ticket(ref):
                             (d["id"], add_workdays(ts, d["sla_days"]), ts, 1 if leg_was_late(row, ts) else 0,
                              row["id"]))
                 log_event(con, row["id"], actor, "escalate", reason, row["dept_id"], d["id"])
+                if APPT_FOLLOW:
+                    APPT_FOLLOW(con, row["id"], "escalate", d["id"], actor)
                 con.commit()
                 if is_admin_user(u):
                     return redirect(url_for("admin_ticket", ref=ref, saved=1))
@@ -1580,6 +1638,21 @@ def admin_ticket(ref):
     return _render_ticket(row, u, err)
 
 
+def next_ticket(con, u, exclude_id=None):
+    """The most urgent open ticket this person can work on (late first, then nearest deadline)."""
+    vw, va = _visible(u)
+    w = vw + ["status IN ('new','escalated','in_progress')", "id<>?"]
+    r = con.execute("SELECT ref, name, anonymous FROM tickets WHERE " + " AND ".join(w) +
+                    " ORDER BY CASE WHEN due_at<>'' AND due_at<? THEN 0 ELSE 1 END, CASE status WHEN 'in_progress' THEN 1 "
+                    "ELSE 0 END, due_at, id LIMIT 1", va + [exclude_id or -1, now_utc()]).fetchone()
+    return r
+
+
+def templates_for(con, u, dept_id):
+    return con.execute("SELECT * FROM reply_templates WHERE active=1 AND (dept_id IS NULL OR dept_id=?) "
+                       "ORDER BY uses DESC, title", (dept_id,)).fetchall()
+
+
 def _render_ticket(row, u, err=None):
     con = db()
     depts = all_depts()
@@ -1594,7 +1667,10 @@ def _render_ticket(row, u, err=None):
     actx["appt_done"] = session.pop("appt_done", None)
     nc = session.pop("new_code", None)
     new_code = nc[1] if nc and nc[0] == row["ref"] else ""
+    nxt = next_ticket(con, u, row["id"])
+    done_msg = session.pop("done_msg", None)
     return render_template("admin_ticket.html", ratings=ratings, new_code=new_code, **actx, assignee=assignee, channels=CHANNELS,
+                           next_tk=nxt, done_msg=done_msg, templates=templates_for(con, u, row["dept_id"]),
                            close_reasons=CLOSE_REASONS, rate_days=RATE_WINDOW_DAYS, open_statuses=OPEN_STATUSES, tk=row, statuses=STATUSES, types=REQ_TYPES,
                            saved=request.args.get("saved") == "1", err=err, events=events, kinds=EVENT_KINDS,
                            dept_names=dnames, depts=[d for d in depts if d["active"] and d["id"] != row["dept_id"]],
@@ -1825,8 +1901,11 @@ def _utc_of_day(d):
 
 
 def _ts(s):
+    """'YYYY-MM-DDTHH:MM:SSZ' -> aware datetime (fast C parser; about 20x quicker than strptime)."""
+    if not s:
+        return None
     try:
-        return datetime.strptime(s, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+        return datetime.fromisoformat(s[:-1] + "+00:00" if s.endswith("Z") else s)
     except (TypeError, ValueError):
         return None
 
@@ -1908,6 +1987,14 @@ def compute_stats(u, args):
     def finish(r):
         return r["resolved_at"] or r["closed_at"] or ""
 
+    # durations are computed once per ticket, not once per breakdown table
+    first_h, resolve_h = {}, {}
+    for r in rows:
+        if r["first_response_at"]:
+            first_h[r["id"]] = _hours(r["created_at"], r["first_response_at"])
+        if finish(r):
+            resolve_h[r["id"]] = _hours(r["created_at"], finish(r))
+
     def summarize(rs):
         n = len(rs)
         closed = [r for r in rs if r["status"] == "closed"]
@@ -1922,9 +2009,9 @@ def compute_stats(u, args):
             "waiting": sum(1 for r in rs if r["status"] == "resolved"),
             "late": sum(1 for r in rs if r["status"] in OPEN_STATUSES and r["due_at"] and r["due_at"] < now),
             "sla": _pct(len(on_time), len(done)), "done": len(done),
-            "first": _avg([_hours(r["created_at"], r["first_response_at"]) for r in rs if r["first_response_at"]]),
-            "resolve": _avg([_hours(r["created_at"], finish(r)) for r in done]),
-            "resolve_med": _median([_hours(r["created_at"], finish(r)) for r in done]),
+            "first": _avg([first_h.get(r["id"]) for r in rs]),
+            "resolve": _avg([resolve_h.get(r["id"]) for r in done]),
+            "resolve_med": _median([resolve_h.get(r["id"]) for r in done]),
             "esc": sum(1 for r in rs if r["id"] in esc),
             "esc_pct": _pct(sum(1 for r in rs if r["id"] in esc), n),
             "nrat": len(allr), "stars": _avg([x["stars"] for x in allr]),
@@ -2041,6 +2128,53 @@ def admin_stats_csv():
                     headers={"Content-Disposition": 'attachment; filename="%s"' % name})
 
 
+# ---------------------------------------------------------------- ready-made replies
+@app.route("/admin/templates", methods=["GET", "POST"])
+@login_required
+def admin_templates():
+    """Each section keeps its own ready-made replies; supervisors also manage the shared ones."""
+    u = current_user()
+    con = db()
+    msg = err = None
+    admin = is_admin_user(u)
+    if request.method == "POST":
+        check_csrf()
+        tid = as_id(request.form.get("id"))
+        title = clean(request.form.get("title"), 80)
+        body = clean(request.form.get("body"), 3000)
+        scope = request.form.get("scope", "")
+        dept_id = None if (admin and scope == "all") else (as_id(scope) if admin else u["dept_id"])
+        if not admin and not u["dept_id"]:
+            abort(403)
+        row = con.execute("SELECT * FROM reply_templates WHERE id=?", (tid,)).fetchone() if tid else None
+        if row and not admin and row["dept_id"] != u["dept_id"]:
+            abort(404)  # staff edit only their own section's replies
+        if request.form.get("action") == "delete" and row:
+            con.execute("UPDATE reply_templates SET active=0, updated_at=? WHERE id=?", (now_utc(), row["id"]))
+            con.commit()
+            msg = "حُذف الرد الجاهز."
+        elif len(title) < 2 or len(body) < 5:
+            err = "اكتب عنوانًا قصيرًا ونص الرد."
+        elif row:
+            con.execute("UPDATE reply_templates SET title=?, body=?, dept_id=?, updated_at=? WHERE id=?",
+                        (title, body, dept_id if admin else row["dept_id"], now_utc(), row["id"]))
+            con.commit()
+            msg = "حُفظ الرد الجاهز."
+        else:
+            con.execute("INSERT INTO reply_templates(dept_id,title,body,created_by,updated_at) VALUES(?,?,?,?,?)",
+                        (dept_id, title, body, u["username"], now_utc()))
+            con.commit()
+            msg = "أُضيف الرد الجاهز."
+    if admin:
+        rows = con.execute("SELECT * FROM reply_templates WHERE active=1 ORDER BY dept_id IS NOT NULL, dept_id, uses DESC, title").fetchall()
+    else:
+        rows = con.execute("SELECT * FROM reply_templates WHERE active=1 AND (dept_id IS NULL OR dept_id=?) "
+                           "ORDER BY dept_id IS NOT NULL, uses DESC, title", (u["dept_id"] or -1,)).fetchall()
+    depts = all_depts()
+    return render_template("admin_templates.html", rows=rows, depts=depts, msg=msg, err=err,
+                           dept_names={d["id"]: d["name_ar"] for d in depts}, back=clean(request.args.get("back"), 20))
+
+
 # ---------------------------------------------------------------- export
 def _csv_safe(v):
     v = "" if v is None else str(v)
@@ -2064,10 +2198,12 @@ def admin_export():
                 "الفئة الوظيفية", "النص", "الرد", "لغة التقديم"])
     for r in rows:
         w.writerow([_csv_safe(x) for x in (
-            r["ref"], fmt_dt(r["created_at"]), fmt_dt(r["updated_at"]), STATUSES.get(r["status"], r["status"]),
+            r["ref"], fmt_dt(r["created_at"])[:10] if r["anonymous"] else fmt_dt(r["created_at"]),
+            fmt_dt(r["updated_at"])[:10] if r["anonymous"] else fmt_dt(r["updated_at"]), STATUSES.get(r["status"], r["status"]),
             REQ_TYPES.get(r["req_type"], r["req_type"]), tn.get(r["topic"], r["topic"]), dn.get(r["dept_id"], ""),
             fmt_dt(r["due_at"]) if r["due_at"] else "", "نعم" if r["anonymous"] else "", r["name"], r["emp_no"],
-            r["email"], r["mobile"], r["facility"], r["job_cat"], r["message"], r["reply"], r["lang"])])
+            r["email"], r["mobile"], r["facility"], r["job_cat"], r["message"], r["reply"],
+            "" if r["anonymous"] else r["lang"])])
     out = "﻿" + buf.getvalue()
     name = "tickets-%s.csv" % datetime.now(RIYADH).strftime("%Y%m%d-%H%M")
     return Response(out, mimetype="text/csv; charset=utf-8",

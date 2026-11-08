@@ -86,7 +86,7 @@ k = A.app.test_client(); r, h = get(k, "/admin/login"); k.post("/admin/login", d
 r, h = get(k, "/admin/kiosks"); k.post("/admin/kiosks", data=dict(csrf_token=tok(h), action="activate", name="آيباد"))
 r, h = get(k, "/kiosk"); ok("لدي موعد" in h, "kiosk shows 'I have an appointment'")
 r, h = get(k, "/kiosk/checkin"); h = k.post("/kiosk/checkin", data=dict(csrf_token=tok(h), ref=ref, key="2233")).get_data(as_text=True)
-ok("لا يوجد لهذه التذكرة موعد اليوم" in h and "موعدك" in h, "check-in a day early refused, shows the date")
+ok("لا يوجد لهذه التذكرة موعد اليوم" in h and "موعدك:" not in h, "check-in a day early refused, appointment time not revealed")
 CLOCK[0] = datetime.strptime(slots[-1], "%Y-%m-%d %H:%M") - timedelta(minutes=10)
 r, h = get(k, "/kiosk/checkin"); h = k.post("/kiosk/checkin", data=dict(csrf_token=tok(h), ref=ref, key="2233")).get_data(as_text=True)
 ok("تم تسجيلك في الانتظار" in h and "ترتيبك: 1" in h, "checked in on the day, place 1")
@@ -185,4 +185,79 @@ r = s.get("/admin/reports.xlsx?from=2026-01-01&to=2026-12-31&tickets=1&dept=1");
 deps = {row[5] for row in wb3["التذاكر"].iter_rows(min_row=2, values_only=True)}
 ok(deps <= {"الإجازات"} and "حسب القسم" not in wb3.sheetnames, "staff report: own section only (%s)" % deps)
 ok(A.app.test_client().get("/admin/reports.xlsx").status_code == 302, "reports need login")
+
+# ---------------- review regressions
+import threading as _th
+def new_ticket(email, mobile):
+    cl = A.app.test_client(); r_, h_ = get(cl, "/ticket"); A._rl.clear()
+    cl.post("/ticket", data=dict(base, csrf_token=tok(h_), email=email, mobile=mobile))
+    r_, h_ = get(cl, "/ticket/done"); return re.findall(r'<span class="ref">([^<]+)</span>', h_)[:2]
+def book(ref_, slot, note=""):
+    r_, h_ = get(a, "/admin/t/%s?appt_day=%s" % (ref_, slot[:10]))
+    return a.post("/admin/t/%s/appt" % ref_, data=dict(csrf_token=tok(h_), action="book", slot=slot, staff_note=note), follow_redirects=True)
+def ap_of(ref_):
+    return q("SELECT status, dept_id, slot FROM appointments WHERE ticket_id=(SELECT id FROM tickets WHERE ref=?) ORDER BY id DESC", ref_)[0]
+CLOCK[0] = (CLOCK[0] + timedelta(days=1)).replace(hour=8)
+while CLOCK[0].weekday() in (4, 5): CLOCK[0] += timedelta(days=1)
+day = (CLOCK[0] + timedelta(days=1))
+while day.weekday() in (4, 5): day += timedelta(days=1)
+r, h = get(a, "/admin/queue"); a.post("/admin/queue/settings", data=dict(csrf_token=tok(h), appt_start="07:30", appt_end="14:30", slot_min="20", capacity="1", appt_enabled="1"))
+s1 = day.strftime("%Y-%m-%d") + " 09:10"
+# 1. escalation moves the appointment and frees the slot
+e1, c1 = new_ticket("e1@moh.gov.sa", "0551000001"); book(e1, s1)
+r, h = get(a, "/admin/t/" + e1); a.post("/admin/t/" + e1, data=dict(csrf_token=tok(h), action="escalate", to_dept="5", reason="للإجازات"))
+st_, dep_, sl_ = ap_of(e1)
+ok(st_ == "requested" and dep_ == 5 and sl_ == "", "escalation: appointment moves to new section as a request, slot released")
+e2, _ = new_ticket("e2@moh.gov.sa", "0551000002"); ok("لم يعد متاحًا" not in book(e2, s1).get_data(as_text=True), "released slot can be booked by others")
+book(e1, day.strftime("%Y-%m-%d") + " 09:30")
+ok(ap_of(e1)[1] == 5, "rebooking keeps the new section")
+# 8. rescheduling with capacity 1 does not count itself
+ok("لم يعد متاحًا" not in book(e2, s1, "ملاحظة جديدة").get_data(as_text=True) and ap_of(e2)[0] == "booked", "same slot, new note: accepted")
+# 2. closing cancels the live appointment; employee can no longer confirm
+r, h = get(a, "/admin/t/" + e2); a.post("/admin/t/" + e2, data=dict(csrf_token=tok(h), action="close", close_note="مكررة"))
+ok(ap_of(e2)[0] == "cancelled", "closing the ticket cancels its appointment")
+# 3. two staff booking the last place at the same moment
+e3, _ = new_ticket("e3@moh.gov.sa", "0551000003"); e4, _ = new_ticket("e4@moh.gov.sa", "0551000004")
+s2 = day.strftime("%Y-%m-%d") + " 11:10"
+orig = AP.day_slots
+def slow(*a_, **k_):
+    r_ = orig(*a_, **k_); time.sleep(0.25); return r_
+import time
+AP.day_slots = slow
+res = []
+def go(ref_):
+    cl = A.app.test_client(); r_, h_ = get(cl, "/admin/login"); cl.post("/admin/login", data=dict(csrf_token=tok(h_), username="admin", password="adminpass123"))
+    r_, h_ = get(cl, "/admin/t/%s?appt_day=%s" % (ref_, s2[:10]))
+    res.append(cl.post("/admin/t/%s/appt" % ref_, data=dict(csrf_token=tok(h_), action="book", slot=s2), follow_redirects=True).get_data(as_text=True))
+ts_ = [_th.Thread(target=go, args=(x,)) for x in (e3, e4)]; [t.start() for t in ts_]; [t.join() for t in ts_]
+AP.day_slots = orig
+n_b = q("SELECT COUNT(*) FROM appointments WHERE slot=? AND status='booked'", s2)[0][0]
+ok(n_b == 1 and sum("لم يعد متاحًا" in x for x in res) == 1, "simultaneous booking of the last place: exactly one wins")
+# 6. checked in but never called -> no-show next day
+e5, _ = new_ticket("e5@moh.gov.sa", "0551000005")
+r, h = get(k, "/kiosk"); 
+con = sqlite3.connect(D + "/tickets.db"); tid5 = con.execute("SELECT id FROM tickets WHERE ref=?", (e5,)).fetchone()[0]
+loc = CLOCK[0].strftime("%Y-%m-%d %H:%M")
+con.execute("INSERT INTO appointments(ticket_id,dept_id,kind,status,slot,created_at,updated_at,checked_in_at) VALUES(?,?,?,?,?,?,?,?)", (tid5, 1, "walkin", "checked_in", loc, "x", "x", loc)); con.commit()
+CLOCK[0] += timedelta(days=1); A._sweep["at"] = 0; get(a, "/admin")
+ok(ap_of(e5)[0] == "no_show", "left without being called -> counted as no-show, not served")
+# 10. anonymous ticket cannot be queued via a crafted walk-in post
+kk2 = A.app.test_client(); r, h = get(kk2, "/admin/login"); kk2.post("/admin/login", data=dict(csrf_token=tok(h), username="admin", password="adminpass123"))
+r, h = get(kk2, "/admin/kiosks"); kk2.post("/admin/kiosks", data=dict(csrf_token=tok(h), action="activate", name="جهاز ٢"))
+CLOCK[0] = CLOCK[0].replace(hour=9)
+while CLOCK[0].weekday() in (4, 5): CLOCK[0] += timedelta(days=1)
+r, h = get(kk2, "/kiosk/new?type=feedback"); kk2.post("/kiosk/new", data=dict(csrf_token=tok(h), req_type="feedback", topic="general", message="مجهول", anonymous="1", consent="1"))
+with kk2.session_transaction() as ss: aid_t = ss.get("k_walkin")
+r, h = get(kk2, "/kiosk")
+with kk2.session_transaction() as ss: ss["k_walkin"] = aid_t or q("SELECT MAX(id) FROM tickets")[0][0]
+kk2.post("/kiosk/walkin", data=dict(csrf_token=tok(h), choice="wait"))
+ok(q("SELECT COUNT(*) FROM appointments a JOIN tickets t ON t.id=a.ticket_id WHERE t.anonymous=1")[0][0] == 0, "anonymous ticket never enters the queue")
+# 5. anonymous details hidden in Excel and CSV
+r = a.get("/admin/reports.xlsx?from=2026-01-01&to=2026-12-31&tickets=1"); wb = load_workbook(_io.BytesIO(r.data)); tk = wb["التذاكر"]
+hdr = [c.value for c in tk[1]]
+anon_rows = [row for row in tk.iter_rows(min_row=2, values_only=True) if row[hdr.index("دون إفصاح")] == "نعم"]
+ok(anon_rows and all(not row[hdr.index("القناة")] for row in anon_rows), "Excel: no channel for anonymous tickets")
+csv_ = a.get("/admin/export.csv?status=all").get_data(as_text=True)
+anon_csv = [l for l in csv_.splitlines() if "ملاحظة مجهولة للتقرير" in l]
+ok(anon_csv and not re.search(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}", anon_csv[0].replace(" 23:59", "")), "CSV: anonymous tickets without time of day (deadline at day end)")
 print("ALL OK")

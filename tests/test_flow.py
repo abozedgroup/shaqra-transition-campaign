@@ -100,7 +100,7 @@ r, h = get(s, "/admin"); ok(ref1 in h and "محالة" in h, "leaves staff sees 
 r, h = get(s, "/admin/t/" + ref1)
 ok("يحتاج تأكيد رصيد" in h and "راجعت الطلب" in h and "من العناية بالموظفين إلى الإجازات" in h, "timeline shows note and escalation")
 h = s.post("/admin/t/" + ref1, data=dict(csrf_token=tok(h), action="resolve", reply="رصيدك 30 يومًا"), follow_redirects=True).get_data(as_text=True)
-ok("تم الحفظ" in h and "رد على الموظف" in h and "بانتظار التقييم" in h, "leaves staff replies and sends for rating")
+ok("أُرسل الرد للموظف لتقييمه" in h and "رد على الموظف" in h and "بانتظار التقييم" in h, "leaves staff replies and sends for rating")
 h = c.post("/status", data=dict(csrf_token=t2, ref=ref1, email=code1)).get_data(as_text=True)
 ok("رصيدك 30" in h and "بانتظار تقييمك" in h and "الإجازات" in h and "قيّم الرد" in h, "employee sees reply + rating form")
 # not resolved -> back to section
@@ -324,4 +324,28 @@ r, h = get(a, "/admin"); first = re.search(r'class="tl-row[^"]*" href="/admin/t/
 ok(first == lr, "late ticket listed first (%s)" % first)
 r, h = get(a, "/admin?status=act"); ok(r.status_code == 200, "needs-action tab")
 r, h = get(a, "/admin?late=1&q=" + lr); ok(lr in h, "search inside late tab")
+
+# ---------------- staff speed-ups
+r, h = get(a, "/admin"); ok('class="nb"' in h, "menu shows a needs-action counter")
+r, h = get(a, "/admin/templates"); ok("استلام الطلب وجارٍ العمل عليه" in h and "{الاسم}" in h, "seeded ready-made replies")
+# a section adds its own reply; another section does not see it
+leaves_staff = A.app.test_client(); r, h = get(leaves_staff, "/admin/login")
+r, h = get(a, "/admin/users"); a.post("/admin/users", data=dict(csrf_token=tok(h), display_name="ليلى", username="layla.lv", role="staff", dept_id=str(leaves), password="laylapass12"))
+leaves_staff.post("/admin/login", data=dict(csrf_token=tok(get(leaves_staff, "/admin/login")[1]), username="layla.lv", password="laylapass12"))
+r, h = get(leaves_staff, "/admin/templates")
+leaves_staff.post("/admin/templates", data=dict(csrf_token=tok(h), title="رصيد الإجازة", body="السلام عليكم {الاسم}، رصيدك هو ..."))
+tid_ = sqlite3.connect(D + "/tickets.db").execute("SELECT id, dept_id FROM reply_templates WHERE title='رصيد الإجازة'").fetchone()
+ok(tid_ and tid_[1] == leaves, "staff reply saved for their own section")
+A._rl.clear(); care2 = A.app.test_client(); r, h = get(care2, "/admin/login"); care2.post("/admin/login", data=dict(csrf_token=tok(h), username="khaled.care", password="anotherpass12"))
+r, h = get(care2, "/admin/templates"); ok("رصيد الإجازة" not in h, "other sections don't see it")
+ok(care2.post("/admin/templates", data=dict(csrf_token=tok(h), id=str(tid_[0]), title="x", body="xxxxxx")).status_code == 404, "and cannot edit it")
+# ticket page: template picker, next ticket button
+con = sqlite3.connect(D + "/tickets.db")
+open_refs = [r_[0] for r_ in con.execute("SELECT ref FROM tickets WHERE status IN ('new','escalated','in_progress') AND anonymous=0 ORDER BY id")]
+r, h = get(a, "/admin/t/" + open_refs[0])
+ok('id="tpl"' in h and "استلام الطلب" in h and "data-draft=" in h, "reply tab has ready-made replies and draft saving")
+nx = re.search(r'التالية: <b dir="ltr">([^<]+)</b>', h); ok(nx and nx.group(1) != open_refs[0], "next-ticket button points elsewhere (%s)" % (nx.group(1) if nx else None))
+h = a.post("/admin/t/" + open_refs[0], data=dict(csrf_token=tok(h), action="resolve", reply="تم", tpl_used=str(tid_[0])), follow_redirects=True).get_data(as_text=True)
+ok("انتقل للتذكرة التالية" in h, "after sending: offer the next ticket")
+ok(con.execute("SELECT uses FROM reply_templates WHERE id=?", (tid_[0],)).fetchone()[0] == 1, "template use counted")
 print("ALL OK")

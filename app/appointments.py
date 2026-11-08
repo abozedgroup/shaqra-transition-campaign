@@ -164,8 +164,9 @@ def closure(con, dept_id, d):
     return con.execute("SELECT * FROM dept_closures WHERE dept_id=? AND day=?", (dept_id, d.isoformat())).fetchone()
 
 
-def day_slots(con, dept, d, include_past=False):
-    """[(slot 'YYYY-MM-DD HH:MM', free places)] for one day; [] on weekends and closure days."""
+def day_slots(con, dept, d, include_past=False, ignore_id=None):
+    """[(slot 'YYYY-MM-DD HH:MM', free places)] for one day; [] on weekends and closure days.
+    ignore_id: an appointment not counted as taking its slot (the one being rescheduled)."""
     c = cfg(dept)
     if not is_workday(d) or closure(con, dept["id"], d):
         return []
@@ -173,8 +174,8 @@ def day_slots(con, dept, d, include_past=False):
     end = datetime(d.year, d.month, d.day, *c["end"])
     taken = {}
     for (s,) in con.execute("SELECT slot FROM appointments WHERE dept_id=? AND kind='appointment' AND slot LIKE ? "
-                            "AND status IN (%s)" % ",".join("?" * len(LIVE)),
-                            [dept["id"], d.isoformat() + "%"] + list(LIVE)):
+                            "AND id<>? AND status IN (%s)" % ",".join("?" * len(LIVE)),
+                            [dept["id"], d.isoformat() + "%", ignore_id or -1] + list(LIVE)):
         taken[s] = taken.get(s, 0) + 1
     now = now_local()
     out, t = [], start
@@ -257,14 +258,14 @@ def open_now(con, dept):
     return True, ""
 
 
-def expected_wait(con, dept, position):
-    """Minutes until the person at `position` (1 = next) is called."""
+def expected_wait(con, dept, position, avg=None):
+    """Minutes until the person at `position` (1 = next) is called. Pass `avg` when computing many."""
     c = cfg(dept)
     serving = con.execute("SELECT COUNT(*) FROM appointments WHERE dept_id=? AND status='serving'", (dept["id"],)).fetchone()[0]
     units = position - 1 + serving          # people who must be served (or finish) before this person
     if units < c["cap"]:
         return 0                            # a counter is free
-    return int(math.ceil((units - c["cap"] + 1) / c["cap"]) * avg_service_min(con, dept))
+    return int(math.ceil((units - c["cap"] + 1) / c["cap"]) * (avg if avg is not None else avg_service_min(con, dept)))
 
 
 def queue_position(con, appt):
@@ -283,6 +284,34 @@ def latest(con, ticket_id):
 def active(con, ticket_id):
     return con.execute("SELECT * FROM appointments WHERE ticket_id=? AND status NOT IN ('done','no_show','cancelled') "
                        "ORDER BY id DESC LIMIT 1", (ticket_id,)).fetchone()
+
+
+def follow_ticket(con, ticket_id, event, to_dept=None, actor="النظام"):
+    """Keep a ticket's live appointment consistent with the ticket.
+    event='escalate': the appointment moves with the ticket to the new section (a booked time is released and
+                      becomes a request, because the new section has its own calendar);
+    event='close':    any live appointment or queue entry is cancelled."""
+    ap = active(con, ticket_id)
+    if not ap:
+        return
+    ts = now_utc()
+    if event == "escalate" and to_dept:
+        if ap["status"] in ("checked_in", "serving"):
+            con.execute("UPDATE appointments SET status='cancelled', updated_at=? WHERE id=?", (ts, ap["id"]))
+            log_event(con, ticket_id, actor, "appt", "أُلغي دوره في الانتظار لأن التذكرة أُحيلت لقسم آخر.")
+        else:
+            had = ap["slot"] if ap["status"] in ("booked", "confirmed", "change_requested") else ""
+            con.execute("UPDATE appointments SET dept_id=?, status='requested', slot='', emp_note=?, updated_at=? "
+                        "WHERE id=?", (to_dept, (ap["emp_note"] + (" – كان محجوزًا " + slot_label(had) if had else "")).strip(" –"),
+                                       ts, ap["id"]))
+            log_event(con, ticket_id, actor, "appt", "انتقل طلب الموعد مع التذكرة إلى القسم الجديد ليحدد وقتًا"
+                      + ((" (أُلغي الموعد السابق " + slot_label(had) + ")") if had else "") + ".")
+    elif event == "close":
+        con.execute("UPDATE appointments SET status='cancelled', updated_at=? WHERE id=?", (ts, ap["id"]))
+        log_event(con, ticket_id, actor, "appt", "أُلغي الموعد لأن التذكرة أُغلقت.")
+
+
+core.APPT_FOLLOW = follow_ticket
 
 
 def create_request(con, ticket, note, by):
@@ -313,13 +342,21 @@ def sweep(con):
     """Past days: booked/confirmed appointments nobody came to become no-shows; a queue left open is closed."""
     today = now_local().date().isoformat()
     ts = now_utc()
-    for r in con.execute("SELECT id, ticket_id, status FROM appointments WHERE status IN "
-                         "('booked','confirmed','change_requested','checked_in','serving') AND slot<>'' AND slot<?",
-                         (today,)).fetchall():
-        new = "no_show" if r["status"] in ("booked", "confirmed", "change_requested") else "done"
+    rows = con.execute("SELECT id, ticket_id, status FROM appointments WHERE status IN "
+                       "('booked','confirmed','change_requested','checked_in','serving') AND slot<>'' AND slot<?",
+                       (today,)).fetchall()
+    if not rows:
+        return
+    for r in rows:
+        if r["status"] in ("booked", "confirmed", "change_requested"):
+            new, why = "no_show", "لم يحضر الموظف في موعده."
+        elif r["status"] == "checked_in":
+            new, why = "no_show", "حضر ولم يُستدعَ حتى نهاية اليوم (غادر)."
+        else:
+            new, why = "done", ""
         con.execute("UPDATE appointments SET status=?, updated_at=? WHERE id=?", (new, ts, r["id"]))
-        if new == "no_show":
-            log_event(con, r["ticket_id"], "النظام", "appt", "لم يحضر الموظف في موعده.")
+        if why:
+            log_event(con, r["ticket_id"], "النظام", "appt", why)
     con.commit()
 
 
@@ -392,17 +429,25 @@ def appt_staff_action(ref):
     if action == "book":
         if tk["status"] not in core.OPEN_STATUSES:
             abort(400)
+        reschedulable = ("requested", "booked", "confirmed", "change_requested")
+        if ap and not (ap["kind"] == "appointment" and ap["status"] in reschedulable):
+            abort(400)  # checked in / being served / walk-in: not bookable from here
         d = dept_by_id(tk["dept_id"])
         slot = request.form.get("slot", "")
         dt = parse_local(slot)
-        free = dict(day_slots(con, d, dt.date())) if dt else {}
+        note = clean(request.form.get("staff_note"), 500)
+        # check and write in one transaction so two people cannot take the last place of a slot
+        if con.in_transaction:
+            con.commit()
+        con.execute("BEGIN IMMEDIATE")
+        free = dict(day_slots(con, d, dt.date(), ignore_id=ap["id"] if ap else None)) if dt else {}
         if not dt or free.get(slot, 0) <= 0:
+            con.rollback()
             session["appt_err"] = "هذا الوقت لم يعد متاحًا. اختر وقتًا آخر."
             return redirect(back)
-        note = clean(request.form.get("staff_note"), 500)
-        if ap and ap["kind"] == "appointment" and ap["status"] in ("requested", "booked", "confirmed", "change_requested"):
-            con.execute("UPDATE appointments SET status='booked', slot=?, staff_note=?, updated_at=? WHERE id=?",
-                        (slot, note, ts, ap["id"]))
+        if ap:
+            con.execute("UPDATE appointments SET status='booked', slot=?, staff_note=?, dept_id=?, updated_at=? "
+                        "WHERE id=?", (slot, note, tk["dept_id"], ts, ap["id"]))
         else:
             con.execute("INSERT INTO appointments(ticket_id,dept_id,kind,status,slot,staff_note,requested_by,created_at,"
                         "updated_at) VALUES(?,?,?,?,?,?,?,?,?)",
@@ -487,7 +532,7 @@ def appt_queue():
                            (d["id"], today.isoformat())).fetchall()
     is_open, why = open_now(con, d)
     avg = avg_service_min(con, d)
-    waits = [expected_wait(con, d, i + 1) for i in range(len(q))]
+    waits = [expected_wait(con, d, i + 1, avg) for i in range(len(q))]
     return render_template("admin_queue.html", d=d, c=cfg(d), q=list(zip(q, waits)), serving=serving, sched=sched,
                            upcoming=upcoming, requests=requests_, finished=finished, closures=closures,
                            is_open=is_open, why=why, avg=avg, statuses=STATUSES,
@@ -567,6 +612,8 @@ def appt_employee_action():
     note = clean(request.form.get("note"), 500)
     if action == "request" and not ap and tk["status"] in core.OPEN_STATUSES:
         create_request(con, tk, note, "employee")
+    elif tk["status"] not in core.OPEN_STATUSES and action != "cancel":
+        pass  # the ticket is finished: nothing to confirm or change
     elif action == "confirm" and ap and ap["status"] == "booked":
         con.execute("UPDATE appointments SET status='confirmed', updated_at=? WHERE id=?", (ts, ap["id"]))
         log_event(con, tk["id"], "الموظف", "appt", "أكّد الموعد.")
@@ -623,9 +670,15 @@ def kiosk_walkin():
     tk = con.execute("SELECT * FROM tickets WHERE id=?", (st,)).fetchone()
     if not tk:
         return redirect(core._kiosk_pre())
+    if tk["anonymous"] or tk["req_type"] != "request" or tk["status"] not in core.OPEN_STATUSES:
+        session.pop("k_walkin", None)
+        return redirect(core._kiosk_pre())
     choice = request.form.get("choice", "")
     d = dept_by_id(tk["dept_id"])
     lang = g.lang
+    if con.in_transaction:
+        con.commit()
+    con.execute("BEGIN IMMEDIATE")  # a double tap must not queue the person twice
     if choice == "wait" and not active(con, tk["id"]) and open_now(con, d)[0]:
         aid = join_queue(con, tk)
         con.commit()
@@ -635,6 +688,7 @@ def kiosk_walkin():
         return render_template("kiosk_queue.html", kpre=core._kiosk_pre(), ref=tk["ref"], pos=pos,
                                wait=expected_wait(con, d, pos), dept=d["name_ar"] if lang == "ar" else d["name_en"],
                                loc=cfg(d)["location"])
+    con.rollback()
     if choice == "appt":
         create_request(con, tk, clean(request.form.get("note"), 300), "kiosk")
         con.commit()
@@ -654,7 +708,7 @@ def kiosk_checkin():
     err = None
     if request.method == "POST":
         check_csrf()
-        if core.rate_hit("kc:%d" % g.kiosk["id"], 40, 600):
+        if core.rate_hit("kr:%d" % g.kiosk["id"], 40, 600):  # same budget as the rating lookup
             abort(429)
         ref = core.norm_ref(clean(request.form.get("ref"), 30))
         key = core.norm_code(clean(request.form.get("key"), 20))
@@ -664,9 +718,9 @@ def kiosk_checkin():
         else:
             ap = active(con, tk["id"])
             today = now_local().date().isoformat()
-            if not ap or ap["kind"] != "appointment" or not ap["slot"].startswith(today):
-                nxt = ap["slot"] if ap and ap["slot"] else ""
-                err = T[lang]["k_ci_none"] + ((" " + T[lang]["k_ci_yours"] + " " + slot_label(nxt, lang)) if nxt else "")
+            if tk["status"] not in core.OPEN_STATUSES or not ap or ap["kind"] != "appointment" \
+                    or not ap["slot"].startswith(today):
+                err = T[lang]["k_ci_none"]
             elif ap["status"] in ("checked_in", "serving"):
                 pass
             elif ap["status"] in ("booked", "confirmed", "change_requested"):

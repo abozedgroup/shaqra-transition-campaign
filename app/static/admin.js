@@ -101,4 +101,37 @@
       else { document.execCommand('copy'); done(); }
     });
   });
+  // ready-made replies: insert into the reply box with the employee's name and ticket number filled in
+  var tpl = document.getElementById('tpl'), reply = document.getElementById('reply');
+  if (tpl && reply) {
+    tpl.addEventListener('change', function () {
+      var opt = tpl.options[tpl.selectedIndex], body = opt && opt.getAttribute('data-body');
+      if (!body) return;
+      var name = tpl.getAttribute('data-name') || '';
+      body = body.replace(/ ?\{الاسم\}/g, name ? ' ' + name : '').replace(/\{رقم_التذكرة\}/g, tpl.getAttribute('data-ref') || '');
+      if (reply.value.trim() && !window.confirm('استبدال النص المكتوب بالرد الجاهز؟')) { tpl.value = ''; return; }
+      reply.value = body; reply.dispatchEvent(new Event('input'));
+      var used = document.getElementById('tpl_used'); if (used) used.value = tpl.value;
+      tpl.value = ''; reply.focus();
+    });
+  }
+  // drafts: what is typed in a reply or note is kept in this browser until it is sent
+  [].forEach.call(document.querySelectorAll('textarea[data-draft]'), function (ta) {
+    var key = 'shq-draft-' + ta.getAttribute('data-draft'), orig = ta.value, store = null;
+    try { store = window.localStorage; } catch (e) { store = null; }
+    if (!store) return;
+    try {
+      var saved = store.getItem(key);
+      if (saved && saved !== orig) {
+        ta.value = saved;
+        var note = ta.parentNode.querySelector('.draft-note'); if (note) note.hidden = false;
+      }
+    } catch (e) {}
+    var tmr;
+    ta.addEventListener('input', function () {
+      clearTimeout(tmr);
+      tmr = setTimeout(function () { try { if (ta.value && ta.value !== orig) store.setItem(key, ta.value); else store.removeItem(key); } catch (e) {} }, 400);
+    });
+    if (ta.form) ta.form.addEventListener('submit', function () { try { store.removeItem(key); } catch (e) {} });
+  });
 })();

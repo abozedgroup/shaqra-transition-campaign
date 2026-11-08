@@ -24,4 +24,4 @@ USER app
 VOLUME ["/data"]
 EXPOSE 8080
 
-CMD ["gunicorn", "-b", "0.0.0.0:8080", "-w", "1", "--threads", "8", "--timeout", "30", "--access-logfile", "/dev/null", "--no-control-socket", "app:app"]
+CMD ["gunicorn", "-b", "0.0.0.0:8080", "-w", "1", "--threads", "8", "--timeout", "120", "--access-logfile", "/dev/null", "--no-control-socket", "app:app"]
