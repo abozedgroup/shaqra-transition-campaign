@@ -1,87 +1,165 @@
 {% extends "base.html" %}
 {% block title %}المواعيد والانتظار{% endblock %}
-{% macro row_actions(a, acts) %}<form method="post" action="/admin/t/{{ a.ref }}/appt" class="actions"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="next" value="queue">{% for v, l, cls in acts %}<button class="btn small {{ cls }}" name="action" value="{{ v }}">{{ l }}</button>{% endfor %}</form>{% endmacro %}
+{% macro acts(a, items) %}<form method="post" action="/admin/t/{{ a.ref }}/appt" class="ql-acts"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="next" value="queue">{% for v, l, cls in items %}<button class="btn small {{ cls }}" name="action" value="{{ v }}">{{ l }}</button>{% endfor %}</form>{% endmacro %}
+{% macro tab(key, label, n, cls='') %}<button type="button" role="tab" id="tab-{{ key }}" aria-controls="pane-{{ key }}" data-hash="{{ key }}" aria-selected="{{ 'true' if key == 'today' else 'false' }}" class="{{ cls }}">{{ label }}{% if n is not none %} <span class="n">{{ n }}</span>{% endif %}</button>{% endmacro %}
 {% block body %}
-<section class="s adm"><div class="wrap wide" data-refresh="30">
+<section class="s adm qp-page"><div class="wrap wide" data-refresh="30">
   {% set anav='queue' %}{% include "_adminnav.html" %}
   {% if not d %}<div class="warn">حسابك غير مرتبط بقسم.</div>{% else %}
-  <div class="adminbar">
-    <h1 class="h1s">المواعيد والانتظار – {{ d.name_ar }}</h1>
-    {% if depts %}<form method="get" action="/admin/queue"><select name="dept" data-autosubmit aria-label="القسم">{% for x in depts %}<option value="{{ x.id }}" {% if x.id==d.id %}selected{% endif %}>{{ x.name_ar }}</option>{% endfor %}</select></form>{% endif %}
-  </div>
+
+  <header class="tl-head">
+    <h1>المواعيد والانتظار – {{ d.name_ar }}</h1>
+    <div class="qp-tools">
+      {% if depts %}<form method="get" action="/admin/queue"><select name="dept" data-autosubmit aria-label="القسم">{% for x in depts %}<option value="{{ x.id }}" {% if x.id==d.id %}selected{% endif %}>{{ x.name_ar }}</option>{% endfor %}</select></form>{% endif %}
+      <form class="quickopen" method="get" action="/admin/open">
+        <input type="text" name="ref" inputmode="numeric" dir="ltr" class="ltr-field" placeholder="رقم التذكرة" aria-label="فتح تذكرة برقمها" autocomplete="off" required>
+        <button class="btn" type="submit">فتح</button>
+      </form>
+    </div>
+  </header>
+
+  <p class="qp-info">{% if is_open %}<span class="state-pill on">يستقبل الآن</span>{% else %}<span class="state-pill off">{{ {'weekend':'عطلة نهاية الأسبوع','closed':'القسم مغلق اليوم','hours':'خارج ساعات الاستقبال'}.get(why, why) }}</span>{% endif %}
+    <span>الاستقبال {{ d.appt_start }} – {{ d.appt_end }}</span><span>موعد كل {{ c.slot }} د</span><span>{{ c.cap }} {{ 'شباك' if c.cap == 1 else 'شبابيك' }}</span><span>متوسط الخدمة {{ avg|round|int }} د</span>{% if c.location %}<span>{{ c.location }}</span>{% endif %}</p>
+
   {% if err %}<div class="warn" role="alert">{{ err }}</div>{% endif %}
-  <p>{% if is_open %}<span class="state-pill on">يستقبل الآن</span>{% else %}<span class="state-pill off">{{ {'weekend':'عطلة نهاية الأسبوع','closed':'القسم مغلق اليوم','hours':'خارج ساعات الاستقبال'}.get(why, why) }}</span>{% endif %}
-    · الاستقبال {{ c.start[0] }}:{{ '%02d'|format(c.start[1]) }} – {{ c.end[0] }}:{{ '%02d'|format(c.end[1]) }} · موعد كل {{ c.slot }} دقيقة · {{ c.cap }} {{ 'موظف/شباك' }} · متوسط مدة الخدمة {{ avg|round|int }} دقيقة
-    {% if c.location %}· المكان: {{ c.location }}{% endif %}</p>
 
-  <h2 class="h2s">قيد الخدمة الآن ({{ serving|length }})</h2>
-  <div class="q-now">
-    {% for a in serving %}<div class="q-card serving"><span class="big" dir="ltr">{{ a.ref }}</span> {{ a.name }}<br><small class="hint">بدأت {{ a.called_at[11:] }}</small>
-      <div class="actions"><a class="btn small" href="/admin/t/{{ a.ref }}">فتح التذكرة</a></div>
-      {{ row_actions(a, [('done','إنهاء الخدمة','solid')]) }}</div>
-    {% else %}<p class="hint">لا أحد قيد الخدمة.</p>{% endfor %}
+  {% set nxt = q[0][0] if q else none %}
+  <div class="next-step {{ 'ns-closed' if not nxt and not requests else '' }}" role="note"><b>الخطوة التالية:</b>
+    {% if serving and not nxt %}أكمل خدمة {{ serving[0].name }} ({{ serving[0].ref }}) ثم اضغط «إنهاء الخدمة».
+    {% elif nxt %}استدعِ <b>{{ nxt.ref }} – {{ nxt.name }}</b>{% if serving|length >= c.cap %} بعد إنهاء الخدمة الحالية{% endif %}.{% if q|length > 1 %} وبعده {{ q|length - 1 }} بالانتظار.{% endif %}
+    {% elif requests %}لا أحد بالانتظار. يوجد {{ requests|length }} طلب موعد يحتاج حجزًا – افتح تبويب «تحتاج حجز».
+    {% else %}لا أحد بالانتظار الآن.{% if sched %} أقرب موعد اليوم {{ sched[0].slot|slot_time }}.{% endif %}{% endif %}
   </div>
 
-  <h2 class="h2s">بالانتظار الآن ({{ q|length }})</h2>
-  <div class="tablewrap"><table class="tbl">
-    <thead><tr><th>#</th><th>التذكرة</th><th>الاسم</th><th>النوع</th><th>وصل</th><th>الانتظار المتوقع</th><th></th></tr></thead>
-    <tbody>{% for a, w in q %}<tr><td>{{ loop.index }}</td><td><a href="/admin/t/{{ a.ref }}" dir="ltr">{{ a.ref }}</a></td><td>{{ a.name }}</td>
-      <td>{% if a.kind == 'walkin' %}بدون موعد{% else %}موعد {{ a.slot|slot_time }}{% endif %}</td><td>{{ a.checked_in_at[11:] }}</td><td>{{ w }} دقيقة</td>
-      <td>{{ row_actions(a, [('call','استدعاء','solid'), ('noshow','غادر / لم يحضر','')]) }}</td></tr>
-    {% else %}<tr><td colspan="7" class="center">لا أحد بالانتظار.</td></tr>{% endfor %}</tbody></table></div>
+  {# ---------- now board ---------- #}
+  <div class="qp-now">
+    <section class="card">
+      <h2 class="card-h">قيد الخدمة الآن <span class="n-plain">({{ serving|length }}/{{ c.cap }})</span></h2>
+      {% for a in serving %}
+      <div class="qp-serving">
+        <div><span class="qp-ref" dir="ltr">{{ a.ref }}</span> <b>{{ a.name }}</b><br><small class="hint">بدأت {{ a.called_at[11:] }}{% if a.kind == 'appointment' %} · بموعد {{ a.slot|slot_time }}{% else %} · بدون موعد{% endif %}</small></div>
+        <div class="qp-btns"><a class="btn small" href="/admin/t/{{ a.ref }}">فتح التذكرة</a>{{ acts(a, [('done','إنهاء الخدمة','solid')]) }}</div>
+      </div>
+      {% else %}<p class="hint">لا أحد قيد الخدمة.</p>{% endfor %}
+    </section>
+    <section class="card qp-next {{ 'empty' if not nxt }}">
+      <h2 class="card-h">التالي في الطابور</h2>
+      {% if nxt %}
+        <p class="qp-big"><span dir="ltr">{{ nxt.ref }}</span> {{ nxt.name }}</p>
+        <p class="hint">{% if nxt.kind == 'appointment' %}بموعد {{ nxt.slot|slot_time }}{% else %}بدون موعد{% endif %} · وصل {{ nxt.checked_in_at[11:] }}</p>
+        {{ acts(nxt, [('call','استدعاء وبدء الخدمة','solid big'), ('noshow','غادر / لم يحضر','')]) }}
+      {% else %}<p class="hint">لا أحد بالانتظار.</p>{% endif %}
+    </section>
+  </div>
 
-  <h2 class="h2s">مواعيد اليوم التي لم يصل أصحابها ({{ sched|length }})</h2>
-  <div class="tablewrap"><table class="tbl">
-    <thead><tr><th>الوقت</th><th>التذكرة</th><th>الاسم</th><th>الجوال</th><th>الحالة</th><th></th></tr></thead>
-    <tbody>{% for a in sched %}<tr><td>{{ a.slot|slot_time }}</td><td><a href="/admin/t/{{ a.ref }}" dir="ltr">{{ a.ref }}</a></td><td>{{ a.name }}</td><td dir="ltr">{{ a.mobile }}</td>
-      <td><span class="badge ap-{{ a.status }}">{{ statuses.get(a.status) }}</span></td>
-      <td>{{ row_actions(a, [('checkin','وصل','solid'), ('noshow','لم يحضر','')]) }}</td></tr>
-    {% else %}<tr><td colspan="6" class="center">لا توجد مواعيد متبقية اليوم.</td></tr>{% endfor %}</tbody></table></div>
+  {# ---------- tabs ---------- #}
+  <section class="card qp-tabs">
+    <div class="tabs" role="tablist" aria-label="المواعيد">
+      {{ tab('today', 'طابور اليوم', q|length) }}
+      {{ tab('appts', 'مواعيد اليوم', sched|length) }}
+      {{ tab('book', 'تحتاج حجز', requests|length, 'hot' if requests else '') }}
+      {{ tab('upcoming', 'القادمة', upcoming|length) }}
+      {{ tab('done', 'انتهت اليوم', finished|length) }}
+      {{ tab('setup', 'الإغلاق والإعدادات', none) }}
+    </div>
 
-  <h2 class="h2s" id="requests">طلبات موعد بانتظار الحجز ({{ requests|length }})</h2>
-  <div class="tablewrap"><table class="tbl">
-    <thead><tr><th>التذكرة</th><th>الاسم</th><th>الحالة</th><th>رغبة الموظف</th><th>طُلب</th><th></th></tr></thead>
-    <tbody>{% for a in requests %}<tr><td><a href="/admin/t/{{ a.ref }}#appt" dir="ltr">{{ a.ref }}</a></td><td>{{ a.name }}</td>
-      <td><span class="badge ap-{{ a.status }}">{{ statuses.get(a.status) }}</span></td><td class="wrap">{{ a.emp_note or '—' }}</td><td>{{ a.created_at|dt }}</td>
-      <td><a class="btn small solid" href="/admin/t/{{ a.ref }}#appt">حجز موعد</a></td></tr>
-    {% else %}<tr><td colspan="6" class="center">لا توجد طلبات.</td></tr>{% endfor %}</tbody></table></div>
+    <div class="pane" role="tabpanel" id="pane-today" aria-labelledby="tab-today">
+      <div class="ql">
+        {% for a, w in q %}
+        <div class="ql-row {{ 'first' if loop.first }}">
+          <span class="ql-n">{{ loop.index }}</span>
+          <span class="ql-main"><a href="/admin/t/{{ a.ref }}"><b dir="ltr">{{ a.ref }}</b> {{ a.name }}</a>
+            <small>{% if a.kind == 'walkin' %}بدون موعد{% else %}بموعد {{ a.slot|slot_time }}{% endif %} · وصل {{ a.checked_in_at[11:] }}</small></span>
+          <span class="ql-state">{% if w %}الانتظار المتوقع <b>{{ w }} د</b>{% else %}<b>الآن</b>{% endif %}</span>
+          {{ acts(a, [('call','استدعاء','solid'), ('noshow','غادر','')]) }}
+        </div>
+        {% else %}<p class="ql-empty">لا أحد بالانتظار.</p>{% endfor %}
+      </div>
+    </div>
 
-  <h2 class="h2s">المواعيد القادمة ({{ upcoming|length }})</h2>
-  <div class="tablewrap"><table class="tbl">
-    <thead><tr><th>الموعد</th><th>التذكرة</th><th>الاسم</th><th>الجوال</th><th>الحالة</th></tr></thead>
-    <tbody>{% for a in upcoming %}<tr><td>{{ a.slot|slot }}</td><td><a href="/admin/t/{{ a.ref }}#appt" dir="ltr">{{ a.ref }}</a></td><td>{{ a.name }}</td><td dir="ltr">{{ a.mobile }}</td>
-      <td><span class="badge ap-{{ a.status }}">{{ statuses.get(a.status) }}</span></td></tr>
-    {% else %}<tr><td colspan="5" class="center">لا توجد مواعيد قادمة.</td></tr>{% endfor %}</tbody></table></div>
+    <div class="pane" role="tabpanel" id="pane-appts" aria-labelledby="tab-appts" data-hidden>
+      <p class="hint">مواعيد اليوم التي لم يسجّل أصحابها الوصول بعد. «وصل» يضيفه للطابور.</p>
+      <div class="ql">
+        {% for a in sched %}
+        <div class="ql-row">
+          <span class="ql-n time">{{ a.slot|slot_time }}</span>
+          <span class="ql-main"><a href="/admin/t/{{ a.ref }}"><b dir="ltr">{{ a.ref }}</b> {{ a.name }}</a><small dir="ltr" class="ql-phone"><a href="tel:{{ a.mobile }}">{{ a.mobile }}</a></small></span>
+          <span class="ql-state"><span class="badge ap-{{ a.status }}">{{ statuses.get(a.status) }}</span></span>
+          {{ acts(a, [('checkin','وصل','solid'), ('noshow','لم يحضر','')]) }}
+        </div>
+        {% else %}<p class="ql-empty">لا توجد مواعيد متبقية اليوم.</p>{% endfor %}
+      </div>
+    </div>
 
-  {% if finished %}<details class="panel mt18"><summary><b>انتهت اليوم ({{ finished|length }})</b></summary>
-    <div class="tablewrap"><table class="tbl"><tbody>{% for a in finished %}<tr><td><a href="/admin/t/{{ a.ref }}" dir="ltr">{{ a.ref }}</a></td><td>{{ a.name }}</td><td><span class="badge ap-{{ a.status }}">{{ statuses.get(a.status) }}</span></td><td>{{ a.called_at[11:] }} – {{ a.done_at[11:] }}</td></tr>{% endfor %}</tbody></table></div></details>{% endif %}
+    <div class="pane" role="tabpanel" id="pane-book" aria-labelledby="tab-book" data-hidden>
+      <p class="hint">طلب أصحابها موعدًا حضوريًا أو تغيير موعدهم. افتح التذكرة واحجز وقتًا.</p>
+      <div class="ql">
+        {% for a in requests %}
+        <div class="ql-row">
+          <span class="ql-n"><span class="badge ap-{{ a.status }}">{{ 'تغيير' if a.status == 'change_requested' else 'جديد' }}</span></span>
+          <span class="ql-main"><a href="/admin/t/{{ a.ref }}#appt"><b dir="ltr">{{ a.ref }}</b> {{ a.name }}</a>
+            <small>{{ ('رغبته: ' ~ a.emp_note) if a.emp_note else 'لم يحدد وقتًا' }} · طُلب {{ a.created_at|dt }}</small></span>
+          <span class="ql-state"></span>
+          <span class="ql-acts"><a class="btn small solid" href="/admin/t/{{ a.ref }}#appt">حجز موعد</a></span>
+        </div>
+        {% else %}<p class="ql-empty">لا توجد طلبات تحتاج حجزًا.</p>{% endfor %}
+      </div>
+    </div>
 
-  <details class="panel mt18 keep" id="closures"><summary><b>أيام إغلاق القسم أو غياب الموظفين ({{ closures|length }})</b></summary>
-    <p class="hint">في هذه الأيام لا تُحجز مواعيد، ويعرض جهاز الاستقبال على المراجع حجز موعد لاحق بدل الانتظار.</p>
-    <form method="post" action="/admin/queue/closure" class="inline-form">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="add"><input type="hidden" name="dept" value="{{ d.id }}">
-      <div class="field"><label for="cday">اليوم</label><input type="date" id="cday" name="day" min="{{ today }}" required></div>
-      <div class="field"><label for="creason">السبب</label><input type="text" id="creason" name="reason" maxlength="120" placeholder="إجازة / تدريب / عطلة رسمية"></div>
-      <button class="btn solid" type="submit">إضافة</button>
-    </form>
-    <ul>{% for x in closures %}<li>{{ x.day }} – {{ x.reason or '—' }}
-      <form method="post" action="/admin/queue/closure" class="inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="remove"><input type="hidden" name="id" value="{{ x.id }}"><input type="hidden" name="dept" value="{{ d.id }}"><button class="btn small" type="submit">حذف</button></form></li>{% endfor %}</ul>
-  </details>
+    <div class="pane" role="tabpanel" id="pane-upcoming" aria-labelledby="tab-upcoming" data-hidden>
+      <div class="ql">
+        {% for a in upcoming %}
+        <div class="ql-row">
+          <span class="ql-n time wide">{{ a.slot|slot }}</span>
+          <span class="ql-main"><a href="/admin/t/{{ a.ref }}#appt"><b dir="ltr">{{ a.ref }}</b> {{ a.name }}</a><small dir="ltr" class="ql-phone"><a href="tel:{{ a.mobile }}">{{ a.mobile }}</a></small></span>
+          <span class="ql-state"><span class="badge ap-{{ a.status }}">{{ statuses.get(a.status) }}</span></span>
+          <span class="ql-acts"></span>
+        </div>
+        {% else %}<p class="ql-empty">لا توجد مواعيد قادمة.</p>{% endfor %}
+      </div>
+    </div>
 
-  {% if me_admin %}
-  <details class="panel keep" id="settings"><summary><b>إعدادات المواعيد لهذا القسم</b></summary>
-    <form method="post" action="/admin/queue/settings" class="rowform">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="dept" value="{{ d.id }}">
-      <div class="field"><label for="s1">بداية الاستقبال</label><input type="time" id="s1" name="appt_start" value="{{ d.appt_start }}" required></div>
-      <div class="field"><label for="s2">نهاية الاستقبال</label><input type="time" id="s2" name="appt_end" value="{{ d.appt_end }}" required></div>
-      <div class="field"><label for="s3">مدة الموعد (دقيقة)</label><input type="number" id="s3" name="slot_min" min="5" max="240" value="{{ d.slot_min }}"></div>
-      <div class="field"><label for="s4">عدد الموظفين/الشبابيك</label><input type="number" id="s4" name="capacity" min="1" max="50" value="{{ d.capacity }}"></div>
-      <div class="field"><label for="s5">المكان</label><input type="text" id="s5" name="location" maxlength="120" value="{{ d.location }}" placeholder="مبنى الإدارة – الدور الأول – مكتب 12"></div>
-      <label class="chk"><input type="checkbox" name="appt_enabled" value="1" {% if d.appt_enabled %}checked{% endif %}> <span>المواعيد مفعّلة</span></label>
-      <button class="btn solid" type="submit">حفظ</button>
-    </form>
-  </details>
-  {% endif %}
+    <div class="pane" role="tabpanel" id="pane-done" aria-labelledby="tab-done" data-hidden>
+      <div class="ql">
+        {% for a in finished %}
+        <div class="ql-row">
+          <span class="ql-n time">{{ a.called_at[11:] or '—' }}</span>
+          <span class="ql-main"><a href="/admin/t/{{ a.ref }}"><b dir="ltr">{{ a.ref }}</b> {{ a.name }}</a>{% if a.done_at %}<small>{{ a.called_at[11:] }} – {{ a.done_at[11:] }}</small>{% endif %}</span>
+          <span class="ql-state"><span class="badge ap-{{ a.status }}">{{ statuses.get(a.status) }}</span></span>
+          <span class="ql-acts"><a class="btn small" href="/admin/t/{{ a.ref }}">كتابة الرد</a></span>
+        </div>
+        {% else %}<p class="ql-empty">لم تنتهِ خدمات اليوم بعد.</p>{% endfor %}
+      </div>
+    </div>
+
+    <div class="pane" role="tabpanel" id="pane-setup" aria-labelledby="tab-setup" data-hidden data-anchors="closures settings">
+      <h3 class="sub-h" id="closures">أيام إغلاق القسم أو غياب الموظفين</h3>
+      <p class="hint">لا تُحجز مواعيد في هذه الأيام، ويعرض جهاز الاستقبال على المراجع طلب موعد لاحق بدل الانتظار.</p>
+      <form method="post" action="/admin/queue/closure" class="inline-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="add"><input type="hidden" name="dept" value="{{ d.id }}">
+        <div class="field"><label for="cday">اليوم</label><input type="date" id="cday" name="day" min="{{ today }}" required></div>
+        <div class="field"><label for="creason">السبب</label><input type="text" id="creason" name="reason" maxlength="120" placeholder="إجازة / تدريب / عطلة رسمية"></div>
+        <button class="btn solid" type="submit">إضافة</button>
+      </form>
+      {% if closures %}<ul class="closures">{% for x in closures %}<li><b>{{ x.day }}</b> – {{ x.reason or '—' }}
+        <form method="post" action="/admin/queue/closure" class="inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="remove"><input type="hidden" name="id" value="{{ x.id }}"><input type="hidden" name="dept" value="{{ d.id }}"><button class="btn small" type="submit">حذف</button></form></li>{% endfor %}</ul>
+      {% else %}<p class="hint">لا توجد أيام إغلاق قادمة.</p>{% endif %}
+
+      {% if me_admin %}
+      <h3 class="sub-h" id="settings">إعدادات المواعيد لهذا القسم</h3>
+      <form method="post" action="/admin/queue/settings" class="rowform">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="dept" value="{{ d.id }}">
+        <div class="field"><label for="s1">بداية الاستقبال</label><input type="time" id="s1" name="appt_start" value="{{ d.appt_start }}" required></div>
+        <div class="field"><label for="s2">نهاية الاستقبال</label><input type="time" id="s2" name="appt_end" value="{{ d.appt_end }}" required></div>
+        <div class="field"><label for="s3">مدة الموعد (دقيقة)</label><input type="number" id="s3" name="slot_min" min="5" max="240" value="{{ d.slot_min }}"></div>
+        <div class="field"><label for="s4">عدد الشبابيك</label><input type="number" id="s4" name="capacity" min="1" max="50" value="{{ d.capacity }}"></div>
+        <div class="field"><label for="s5">المكان</label><input type="text" id="s5" name="location" maxlength="120" value="{{ d.location }}" placeholder="مبنى الإدارة – الدور الأول – مكتب 12"></div>
+        <label class="chk"><input type="checkbox" name="appt_enabled" value="1" {% if d.appt_enabled %}checked{% endif %}> <span>المواعيد مفعّلة</span></label>
+        <button class="btn solid" type="submit">حفظ</button>
+      </form>
+      {% endif %}
+    </div>
+  </section>
   {% endif %}
 </div></section>
 {% endblock %}

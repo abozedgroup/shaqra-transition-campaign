@@ -32,7 +32,7 @@ ok("أفضّل موعدًا حضوريًا" in h, "form offers in-person appoint
 c.post("/ticket", data=dict(base, csrf_token=tok(h), want_appt="1", appt_pref="صباح الاثنين"))
 r, h = get(c, "/ticket/done"); ref, code = re.findall(r'<span class="ref">([^<]+)</span>', h)[:2]
 ok(q("SELECT status, emp_note FROM appointments")[0] == ("requested", "صباح الاثنين"), "appointment request stored")
-r, h = get(a, "/admin/queue"); ok(ref in h and "صباح الاثنين" in h and "بانتظار الحجز" in h, "request listed on the queue page")
+r, h = get(a, "/admin/queue"); ok(ref in h and "رغبته: صباح الاثنين" in h and "تحتاج حجز" in h and "طلب موعد يحتاج حجزًا" in h, "request listed on the queue page + next step")
 # anonymous / feedback tickets cannot ask
 r, h = get(c, "/ticket"); c.post("/ticket", data=dict(csrf_token=tok(h), req_type="feedback", topic="general", message="ملاحظة مجهولة", anonymous="1", want_appt="1", consent="1"))
 ok(len(q("SELECT id FROM appointments")) == 1, "no appointment for anonymous feedback")
@@ -97,7 +97,8 @@ r, h = get(k, "/kiosk/done"); wref = re.search(r'k-bignum" dir="ltr">(\d+)<', h)
 ok("أمامك 1 في الانتظار" in h and "أنتظر الآن" in h, "walk-in offered to wait, 1 ahead")
 r = k.post("/kiosk/walkin", data=dict(csrf_token=tok(h), choice="wait")); h = r.get_data(as_text=True)
 ok("ترتيبك: 2" in h and "20 دقيقة" in h, "walk-in queued at 2, ~20 min")
-r, h = get(a, "/admin/queue"); ok(h.index(ref) < h.index(wref) and "بالانتظار الآن (2)" in h, "queue page: appointment first, then walk-in")
+r, h = get(a, "/admin/queue"); nx = h[h.index("التالي في الطابور"):]
+ok(re.search(r'استدعِ <b>%s' % ref, h) is not None and nx.index(ref) < nx.index(wref), "queue page: appointment is next, walk-in after")
 a.post("/admin/t/%s/appt" % ref, data=dict(csrf_token=tok(h), action="call", next="queue"))
 ok(q("SELECT status FROM appointments WHERE ticket_id=(SELECT id FROM tickets WHERE ref=?)", ref)[0][0] == "serving", "called")
 r, h = get(c, "/status?show=1"); ok("قيد الخدمة الآن" in h, "employee page shows being served")

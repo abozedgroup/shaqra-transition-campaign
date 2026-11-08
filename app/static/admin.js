@@ -64,6 +64,16 @@
     });
     var first = tabs.filter(function (t) { return t.getAttribute('aria-selected') === 'true'; })[0] || tabs[0];
     if (location.hash === '#appt' && document.getElementById('tab-appt')) first = document.getElementById('tab-appt');
+    // remember the open tab in the address (survives the queue page's auto-refresh)
+    var h = location.hash.slice(1);
+    tabs.forEach(function (t) {
+      var pane = document.getElementById(t.getAttribute('aria-controls'));
+      var anchors = ((pane && pane.getAttribute('data-anchors')) || '').split(' ');
+      if (h && (t.getAttribute('data-hash') === h || anchors.indexOf(h) >= 0)) first = t;
+      if (t.getAttribute('data-hash')) t.addEventListener('click', function () {
+        if (history.replaceState) history.replaceState(null, '', '#' + t.getAttribute('data-hash'));
+      });
+    });
     show(first, false);
     if (location.hash === '#appt') { var act = document.getElementById('act'); if (act) act.scrollIntoView(); }
   }
