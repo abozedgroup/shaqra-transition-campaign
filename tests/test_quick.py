@@ -145,4 +145,85 @@ ok(q("SELECT COUNT(*) FROM holidays")[0][0] == 2, "range over 30 days refused")
 a.post("/admin/holidays", data=dict(csrf_token=tok(h), action="delete", day=(sun + timedelta(days=1)).isoformat()))
 ok(q("SELECT COUNT(*) FROM holidays")[0][0] == 1 and A.add_workdays(ts, 3)[:10] == "2027-01-07", "delete reloads")
 r, h = get(care, "/admin"); ok(care.post("/admin/holidays", data=dict(csrf_token=tok(h), name="xx", **{"from": "2027-03-01"})).status_code == 404, "staff cannot edit holidays")
+
+# ---- 6. regressions from the full review
+def x(sql, *p):
+    c = sqlite3.connect(D + "/tickets.db"); c.execute(sql, p); c.commit(); c.close()
+# shared ticket: no appointment booking from the topic section (it would land in Care's calendar)
+t5 = submit(topic="leaves", email="x5@moh.gov.sa")
+r, h = get(leaves, "/admin/t/" + t5); ok('id="tab-appt"' not in h and "لحجز موعد" in h, "no appointment tab on a shared ticket")
+leaves.post("/admin/t/%s/appt" % t5, data=dict(csrf_token=tok(h), action="book", slot="2030-01-06 07:30"))
+ok(q("SELECT COUNT(*) FROM appointments a JOIN tickets t ON t.id=a.ticket_id WHERE t.ref=?", t5)[0][0] == 0, "booking on a shared view refused")
+# complaints are never shared, even when one ends up at Employee Care
+t6 = submit(req_type="feedback", topic="leaves", message="شكوى وصلت للعناية", email="x6@moh.gov.sa")
+x("UPDATE tickets SET dept_id=? WHERE ref=?", dept("care"), t6)
+ok(get(leaves, "/admin/t/" + t6)[0].status_code == 404 and t6 not in get(leaves, "/admin?status=all")[1], "feedback at Care not shared")
+# duplicate ids in a bulk action are handled once
+t7 = submit(topic="general", email="x7@moh.gov.sa")
+r, h = get(care, "/admin"); care.post("/admin/bulk", data=dict(csrf_token=tok(h), ids=[t7, t7, t7], action="close", close_note="مكررة"))
+ok(q("SELECT COUNT(*) FROM events e JOIN tickets t ON t.id=e.ticket_id WHERE t.ref=? AND kind='close'", t7)[0][0] == 1, "bulk de-duplicates")
+# quick entry 'appointment' records a request in the queue page
+r, h = get(leaves, "/admin/quick"); ok('value="appt"' in h, "appointment outcome offered while appointments are on")
+leaves.post("/admin/quick", data=dict(csrf_token=tok(h), name="هند", message="تحتاج موعد", outcome="appt", topic="leaves", mobile="0551231231"))
+ok(q("SELECT a.status, a.requested_by, a.dept_id FROM appointments a ORDER BY a.id DESC LIMIT 1")[0] == ("requested", "staff", dept("leaves")), "quick appt creates a request")
+r, h = get(leaves, "/admin/queue"); ok("هند" in h, "request visible on the queue page")
+# appointments switched off: no outcome, no booking
+x("UPDATE departments SET appt_enabled=0 WHERE key='leaves'")
+r, h = get(leaves, "/admin/quick"); ok('value="appt"' not in h, "appointment outcome hidden when appointments are off")
+r = leaves.post("/admin/quick", data=dict(csrf_token=tok(h), name="هند", message="تحتاج موعد", outcome="appt", topic="leaves"))
+ok(r.status_code == 400, "appointment outcome refused when off")
+lt = q("SELECT ref FROM tickets WHERE dept_id=? AND status='in_progress' AND anonymous=0 ORDER BY id DESC LIMIT 1", dept("leaves"))[0][0]
+r, h = get(leaves, "/admin/t/" + lt); n0 = q("SELECT COUNT(*) FROM appointments")[0][0]
+leaves.post("/admin/t/%s/appt" % lt, data=dict(csrf_token=tok(h), action="book", slot="2030-01-06 07:30"))
+ok(q("SELECT COUNT(*) FROM appointments WHERE status='booked' AND slot='2030-01-06 07:30'")[0][0] == 0, "server refuses booking when appointments are off")
+x("UPDATE departments SET appt_enabled=1 WHERE key='leaves'")
+# section suspended: quick entry blocked, shared tickets and claim gone
+t8 = submit(topic="payroll", email="x8@moh.gov.sa")
+x("UPDATE departments SET active=0 WHERE key='payroll'")
+r = payroll.get("/admin/quick"); ok(r.status_code == 409 and "قسمك موقوف" in r.get_data(as_text=True), "quick entry blocked for a suspended section")
+ok(payroll.get("/admin/t/" + t8).status_code == 404, "suspended section loses shared tickets")
+r, h = get(payroll, "/admin"); ok(payroll.post("/admin/t/" + t8, data=dict(csrf_token=tok(h), action="claim")).status_code == 404, "no claim into a suspended section")
+x("UPDATE departments SET active=1 WHERE key='payroll'")
+# two simultaneous bookings of one ticket leave one live appointment
+import threading
+r, h = get(leaves, "/admin/t/" + lt + "?appt_day=")
+slots = re.findall(r'name="slot" value="([^"]+)"', h)
+ok(len(slots) >= 2, "slots offered")
+def book(sl):
+    leaves.post("/admin/t/%s/appt" % lt, data=dict(csrf_token=tok(h), action="book", slot=sl))
+th = [threading.Thread(target=book, args=(sl,)) for sl in slots[:4]]; [t.start() for t in th]; [t.join() for t in th]
+ok(q("SELECT COUNT(*) FROM appointments a JOIN tickets t ON t.id=a.ticket_id WHERE t.ref=? AND a.status NOT IN ('done','no_show','cancelled')", lt)[0][0] == 1, "parallel bookings: one live appointment")
+# appointment indicators follow the page filters (channel): the direct-channel visitor's request counts
+# only under that channel
+with A.app.test_request_context("/admin/stats"):
+    sa = A.appointments.stats(A.db(), "2000-01-01T00:00:00Z", "2100-01-01T00:00:00Z", " WHERE channel=?", ["walkin"])
+    sd = A.appointments.stats(A.db(), "2000-01-01T00:00:00Z", "2100-01-01T00:00:00Z", " WHERE channel=?", ["direct"])
+ok(sa["booked"] + sa["pending"] == 0 and sd["booked"] + sd["pending"] >= 1, "appointment figures follow the ticket filters")
+# holiday on a booked day warns
+bk = q("SELECT substr(slot,1,10) FROM appointments WHERE status='booked' LIMIT 1")
+if bk:
+    r, h = get(a, "/admin/departments")
+    a.post("/admin/holidays", data=dict(csrf_token=tok(h), name="عطلة طارئة", **{"from": bk[0][0]}))
+    r, h = get(a, "/admin/departments"); ok("يوجد 1 موعد محجوز" in h, "holiday warns about booked appointments")
+# a successful login gives its attempt back (5 tries per account)
+A._rl.clear()
+def try_login(pw):
+    c = A.app.test_client(); r, h = get(c, "/admin/login"); return c.post("/admin/login", data=dict(csrf_token=tok(h), username="care1", password=pw)).status_code
+codes = [try_login("wrong-password") for _ in range(4)] + [try_login("care1pass12345")] + [try_login("wrong-password")]
+ok(codes == [200, 200, 200, 200, 302, 200], "throttle counts failures only: %s" % codes)
+ok(try_login("wrong-password") == 429, "6th failure blocked")
+A._rl.clear()
+# anonymous rows in Excel: dates only, no duration
+import openpyxl, io
+ta = submit(req_type="feedback", topic="general", anonymous="1", message="ملاحظة دون إفصاح للتقرير", email="")
+r, h = get(compl, "/admin/t/" + ta); compl.post("/admin/t/" + ta, data=dict(csrf_token=tok(h), action="resolve", reply="شكرًا لملاحظتك"))
+ok(q("SELECT status, anonymous FROM tickets WHERE ref=?", ta)[0] == ("resolved", 1), "anonymous ticket resolved")
+r = a.get("/admin/reports.xlsx?period=all&tickets=1&events=1")
+wb = openpyxl.load_workbook(io.BytesIO(r.data))
+ws = wb["التذاكر"]; hdr = [c.value for c in ws[1]]
+iy, ih = hdr.index("دون إفصاح"), hdr.index("مدة الإنجاز (ساعة)")
+anon_rows = [row for row in ws.iter_rows(min_row=2, values_only=True) if row[iy] == "نعم"]
+from datetime import datetime as _dt
+ok(anon_rows and all(row[ih] is None and not any(isinstance(v, _dt) and (v.hour or v.minute) for v in row) for row in anon_rows),
+   "anonymous Excel rows: no clock time, no duration (%d rows)" % len(anon_rows))
 print("ALL OK")

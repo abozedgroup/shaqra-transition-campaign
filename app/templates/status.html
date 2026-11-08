@@ -36,15 +36,17 @@
       {% if appt.status == 'requested' %}<p class="hint">{{ t.ap_requested_p }}</p>{% endif %}
       {% if appt.status == 'booked' %}<p class="hint">{{ t.ap_booked_p }}</p>{% endif %}
       {% if appt.status in ('booked','confirmed','requested','change_requested') %}
-      <form method="post" action="{{ pre }}/status/appt" class="actions">
+      {% macro apform(action, cls, label) %}<form method="post" action="{{ pre }}/status/appt" class="inline">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="ref" value="{{ result.ref }}">
-        {% if appt.status == 'booked' %}<button class="btn solid" name="action" value="confirm">{{ t.ap_confirm }}</button>{% endif %}
+        <input type="hidden" name="action" value="{{ action }}">{{ caller() if caller else '' }}<button class="btn {{ cls }}" type="submit">{{ label }}</button></form>{% endmacro %}
+      <div class="actions">
+        {% if appt.status == 'booked' %}{% call apform('confirm', 'solid', t.ap_confirm) %}{% endcall %}{% endif %}
         {% if appt.status in ('booked','confirmed') %}
         <details class="ap-change"><summary class="btn">{{ t.ap_change }}</summary>
-          <div class="field"><label for="ap-note">{{ t.ap_change_q }}</label><input type="text" id="ap-note" name="note" maxlength="300"></div>
-          <button class="btn" name="action" value="change">{{ t.ap_change_send }}</button></details>{% endif %}
-        <button class="btn danger" name="action" value="cancel" data-confirm-msg="{{ t.ap_cancel_q }}">{{ t.ap_cancel }}</button>
-      </form>{% endif %}
+          {% call apform('change', '', t.ap_change_send) %}<div class="field"><label for="ap-note">{{ t.ap_change_q }}</label><input type="text" id="ap-note" name="note" maxlength="300"></div>{% endcall %}</details>{% endif %}
+        <details class="ap-change"><summary class="btn danger">{{ t.ap_cancel }}</summary>
+          <p>{{ t.ap_cancel_q }}</p>{% call apform('cancel', 'danger', t.ap_cancel) %}{% endcall %}</details>
+      </div>{% endif %}
     </div>
     {% elif can_request is defined and can_request %}
     <details class="ratebox" id="appt"><summary><b>{{ t.ap_ask }}</b></summary>

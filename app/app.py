@@ -315,6 +315,9 @@ def init_db():
         due = add_workdays(created, care[1]) if status in OPEN_STATUSES else ""
         con.execute("UPDATE tickets SET dept_id=?, topic=?, due_at=? WHERE id=?", (care[0], GENERAL_TOPIC, due, tid))
     load_holidays(con)
+    # anonymous tickets keep no trace of the way the person came in (reception device) or rated
+    con.execute("UPDATE tickets SET channel='online' WHERE anonymous=1 AND channel<>'online'")
+    con.execute("UPDATE ratings SET via='' WHERE via<>'' AND ticket_id IN (SELECT id FROM tickets WHERE anonymous=1)")
     for hook in DB_HOOKS:
         hook(con)
     con.commit()
@@ -331,13 +334,12 @@ def day_end(iso):
     return t.replace(hour=23, minute=59, second=0).astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-HOLIDAYS = set()  # official holidays, "YYYY-MM-DD" (Riyadh); one app process, reloaded after every change
+HOLIDAYS = frozenset()  # official holidays, "YYYY-MM-DD" (Riyadh); one app process, reloaded after every change
 
 
 def load_holidays(con):
-    days = {r[0] for r in con.execute("SELECT day FROM holidays")}
-    HOLIDAYS.clear()
-    HOLIDAYS.update(days)
+    global HOLIDAYS
+    HOLIDAYS = frozenset(r[0] for r in con.execute("SELECT day FROM holidays"))  # swapped in one step
 
 
 def is_off(d):
@@ -429,6 +431,14 @@ def rate_peek(key, limit, window):
         arr = [t for t in _rl.get(key, []) if now - t < window]
         _rl[key] = arr
         return len(arr) >= limit
+
+
+def rate_undo(key):
+    """Give back the newest reserved attempt (the login succeeded)."""
+    with _rl_lock:
+        arr = _rl.get(key)
+        if arr:
+            arr.pop()
 
 
 def rate_add(key):
@@ -635,7 +645,8 @@ def save_rating(con, row, stars, resolved, comment, via):
         con.rollback()
         return False
     con.execute("INSERT INTO ratings(ticket_id,at,stars,resolved,comment,via,dept_id,user_id) VALUES(?,?,?,?,?,?,?,?)",
-                (row["id"], ts, stars, 1 if resolved else 0, comment, via, row["dept_id"], row["assigned_user_id"]))
+                (row["id"], ts, stars, 1 if resolved else 0, comment, "" if row["anonymous"] else via, row["dept_id"],
+                 row["assigned_user_id"]))
     who = "مقدّم مجهول" if row["anonymous"] else "الموظف"
     txt = "%d من 5 – %s%s" % (stars, "تم حل الطلب" if resolved else "لم يُحل الطلب", ("\n" + comment) if comment else "")
     log_event(con, row["id"], who + (" (جهاز الاستقبال)" if via == "kiosk" and not row["anonymous"] else ""),
@@ -800,7 +811,8 @@ def create_ticket(con, values, lang, photos=(), channel="online", kiosk=None):
              values["facility"], values["job_cat"], values["req_type"], values["message"],
              "" if anon else lang,  # the language could point to a person: not kept for anonymous tickets
              values["topic"], dept["id"], 1 if anon else 0, follow_hash(ref, code),
-             day_end(add_workdays(ts, dept["sla_days"])) if anon else add_workdays(ts, dept["sla_days"]), channel,
+             day_end(add_workdays(ts, dept["sla_days"])) if anon else add_workdays(ts, dept["sla_days"]),
+             "online" if anon else channel,  # how an anonymous person came in could point to them
              None if anon or not kiosk else kiosk["id"]))
         store_photos(con, cur.lastrowid, photos, "employee")
         if anon:
@@ -1300,7 +1312,8 @@ def pulse(u):
     and the newest of each (so the page can tell that something new arrived)."""
     con = db()
     vw, va = _visible(u)
-    act, top_t = con.execute("SELECT COUNT(*), COALESCE(MAX(id), 0) FROM tickets WHERE "
+    # the "new ticket" mark ignores anonymous tickets: a live alert would time their arrival
+    act, top_t = con.execute("SELECT COUNT(*), COALESCE(MAX(CASE WHEN anonymous=0 THEN id END), 0) FROM tickets WHERE "
                              + " AND ".join(vw + ["status IN ('new','escalated')"]), va).fetchone()
     today = datetime.now(RIYADH).strftime("%Y-%m-%d")
     qw = ["a.status='checked_in'", "a.checked_in_at LIKE ?"]
@@ -1323,7 +1336,11 @@ def admin_login():
         ip = client_ip()
         username = clean(request.form.get("username"), 64).lower()
         # 5 wrong passwords per account per 15 min; a generous per-IP cap because a hospital shares one IP
-        if rate_peek("alu:" + username, 5, 900) or rate_peek("al:" + ip, 40, 900):
+        # reserve the attempt before the (slow) password check, so parallel requests cannot exceed the limit
+        if rate_hit("alu:" + username, 5, 900):
+            abort(429)
+        if rate_hit("al:" + ip, 40, 900):
+            rate_undo("alu:" + username)
             abort(429)
         pw = request.form.get("password", "")[:200]
         uid = None
@@ -1340,6 +1357,8 @@ def admin_login():
         else:
             check_hash(_DUMMY_HASH, pw)
         if uid is not None:
+            rate_undo("alu:" + username)
+            rate_undo("al:" + ip)
             session.clear()
             session.permanent = True
             session["uid"] = uid
@@ -1347,8 +1366,6 @@ def admin_login():
             session["at"] = time.time()
             csrf_token()
             return redirect(url_for("admin_list"))
-        rate_add("al:" + ip)
-        rate_add("alu:" + username)
         error = "بيانات الدخول غير صحيحة."
     return render_template("admin_login.html", error=error, configured=configured)
 
@@ -1392,7 +1409,7 @@ def _shared_scope(u):
     if "shq_scope" not in g:
         care = dept_by_key(INTAKE_KEY)
         mine = dept_by_id(u["dept_id"]) if u and u["dept_id"] else None
-        shared = care and mine and mine["id"] != care["id"] and mine["key"] != COMPLAINTS_KEY
+        shared = care and mine and mine["active"] and mine["id"] != care["id"] and mine["key"] != COMPLAINTS_KEY
         g.shq_scope = (care["id"], mine["key"]) if shared else (None, None)
     return g.shq_scope
 
@@ -1404,7 +1421,7 @@ def _visible(u):
         return [], []
     care_id, key = _shared_scope(u)
     if care_id:
-        return ["(dept_id=? OR (dept_id=? AND topic=?))"], [u["dept_id"] or -1, care_id, key]
+        return ["(dept_id=? OR (dept_id=? AND topic=? AND req_type<>'feedback'))"], [u["dept_id"] or -1, care_id, key]
     return ["dept_id=?"], [u["dept_id"] or -1]
 
 
@@ -1414,7 +1431,8 @@ def can_see(u, row):
     if u["dept_id"] and row["dept_id"] == u["dept_id"]:
         return True
     care_id, key = _shared_scope(u)
-    return bool(care_id) and row["dept_id"] == care_id and row["topic"] == key
+    # complaints/feedback are never shared, even if one reaches Employee Care
+    return bool(care_id) and row["dept_id"] == care_id and row["topic"] == key and row["req_type"] != "feedback"
 
 
 def is_shared_view(u, row):
@@ -1594,11 +1612,17 @@ def admin_holidays():
         elif len(name) < 2:
             msg = ["warn", "اكتب اسم العطلة (مثل: إجازة عيد الفطر)."]
         else:
-            n = 0
+            n, first, last = 0, d1.isoformat(), d2.isoformat()
             while d1 <= d2:
                 con.execute("INSERT OR REPLACE INTO holidays(day, name) VALUES(?,?)", (d1.isoformat(), name))
                 d1 += timedelta(days=1); n += 1
             msg = ["ok", "أُضيفت «%s» (%d يومًا)." % (name, n)]
+            # appointments already given on those days stay as they are: tell the supervisor so they are moved
+            booked = con.execute("SELECT COUNT(*) FROM appointments WHERE status IN ('booked','confirmed','change_requested') "
+                                 "AND substr(slot,1,10) BETWEEN ? AND ?", (first, last)).fetchone()[0]
+            if booked:
+                msg = ["warn", msg[1] + " تنبيه: يوجد %d موعد محجوز في هذه الأيام؛ أبلغ الأقسام لتغييرها من صفحة "
+                       "«المواعيد والانتظار» (تبويب «القادمة»)." % booked]
     con.commit()
     load_holidays(con)
     session["hol_msg"] = msg
@@ -1628,7 +1652,10 @@ def admin_bulk():
     back = "/admin" + ("?" + request.form.get("back", "") if request.form.get("back") else "")
     if "\n" in back or "\r" in back or "//" in back or "\\" in back:
         back = "/admin"
-    refs = [norm_ref(x) for x in request.form.getlist("ids")[:BULK_MAX]]
+    refs = list(dict.fromkeys(norm_ref(x) for x in request.form.getlist("ids")))[:BULK_MAX]
+    if con.in_transaction:
+        con.commit()
+    con.execute("BEGIN IMMEDIATE")  # read and change the tickets in one go (no stale rows)
     rows = [r for r in (con.execute("SELECT * FROM tickets WHERE ref=?", (x,)).fetchone() for x in refs if REF_RE.match(x))
             if r and can_see(u, r) and r["status"] in OPEN_STATUSES]
     action = request.form.get("action", "")
@@ -1694,10 +1721,16 @@ def admin_ticket(ref):
     if request.method == "POST":
         check_csrf()
         action = request.form.get("action", "")
+        # decode photos first (slow), then read the ticket again inside one write transaction so two people
+        # acting on the same ticket at once cannot work from a stale copy
+        photos, perr = read_photos(request.files.getlist("photos")) if action in ("save", "resolve") else ([], None)
+        if con.in_transaction:
+            con.commit()
+        con.execute("BEGIN IMMEDIATE")
+        row = _load_ticket(ref, u)
         ts = now_utc()
         if action in ("save", "resolve"):
             reply = clean(request.form.get("reply"), 3000)
-            photos, perr = read_photos(request.files.getlist("photos"))
             if perr:
                 return _render_ticket(row, u, ERR[perr][0])
             if row["status"] not in OPEN_STATUSES and not (row["status"] == "resolved" and action == "save"):
@@ -1764,6 +1797,8 @@ def admin_ticket(ref):
             if row["status"] not in OPEN_STATUSES or not is_shared_view(u, row):
                 abort(400)
             d = dept_by_id(u["dept_id"])
+            if not d or not d["active"]:
+                abort(400)
             con.execute("UPDATE tickets SET dept_id=?, status='in_progress', assigned_user_id=?, due_at=?, updated_at=?, "
                         "sla_breached=MAX(sla_breached, ?) WHERE id=?",
                         (d["id"], u["id"] or None, add_workdays(ts, d["sla_days"]), ts, 1 if leg_was_late(row, ts) else 0,
@@ -2279,7 +2314,8 @@ def compute_stats(u, args):
             if x["stars"] <= 2 or not x["resolved"]:
                 low.append((r, x))
     low.sort(key=lambda t: t[1]["at"], reverse=True)
-    appt = appointments.stats(con, lo, hi, int(f["dept"]) if f["dept"] else (None if is_admin_user(u) else (u["dept_id"] or -1)))
+    # appointment figures for exactly the tickets this page counts (scope, section and channel filters)
+    appt = appointments.stats(con, lo, hi, (" WHERE " + " AND ".join(where)) if where else "", list(params))
     return dict(f=f, total=total, by=by, series=series, step=step, low=low[:50], appt=appt,
                 depts=all_depts(), channels=CHANNELS, period_days=days)
 

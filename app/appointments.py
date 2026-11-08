@@ -168,7 +168,7 @@ def day_slots(con, dept, d, include_past=False, ignore_id=None):
     """[(slot 'YYYY-MM-DD HH:MM', free places)] for one day; [] on weekends and closure days.
     ignore_id: an appointment not counted as taking its slot (the one being rescheduled)."""
     c = cfg(dept)
-    if not is_workday(d) or closure(con, dept["id"], d):
+    if not c["enabled"] or not is_workday(d) or closure(con, dept["id"], d):
         return []
     start = datetime(d.year, d.month, d.day, *c["start"])
     end = datetime(d.year, d.month, d.day, *c["end"])
@@ -247,6 +247,8 @@ def open_now(con, dept):
     """(is the section receiving people now?, reason code when not)."""
     c = cfg(dept)
     n = now_local()
+    if not c["enabled"]:
+        return False, "off"
     if not is_workday(n.date()):
         return False, "weekend"
     if closure(con, dept["id"], n.date()):
@@ -315,14 +317,20 @@ core.APPT_FOLLOW = follow_ticket
 
 
 def create_request(con, ticket, note, by):
-    """The employee (or the reception device) asks for an in-person appointment."""
-    if ticket["anonymous"] or active(con, ticket["id"]):
+    """The employee, the reception device or a staff member asks for an in-person appointment.
+    Takes the write lock so a double tap cannot create two requests; the caller commits."""
+    d = dept_by_id(ticket["dept_id"])
+    if ticket["anonymous"] or not d or not cfg(d)["enabled"]:
+        return None
+    if not con.in_transaction:
+        con.execute("BEGIN IMMEDIATE")
+    if active(con, ticket["id"]):
         return None
     ts = now_utc()
     cur = con.execute("INSERT INTO appointments(ticket_id,dept_id,kind,status,emp_note,requested_by,created_at,updated_at) "
                       "VALUES(?,?,?,?,?,?,?,?)", (ticket["id"], ticket["dept_id"], "appointment", "requested",
                                                   clean(note, 500), by, ts, ts))
-    log_event(con, ticket["id"], "الموظف" if by != "kiosk" else "الموظف (جهاز الاستقبال)", "appt",
+    log_event(con, ticket["id"], {"kiosk": "الموظف (جهاز الاستقبال)", "staff": "القسم"}.get(by, "الموظف"), "appt",
               "طلب موعدًا حضوريًا" + ((": " + clean(note, 500)) if note else ""))
     return cur.lastrowid
 
@@ -426,6 +434,10 @@ def appt_staff_action(ref):
     back = url_for("admin_ticket", ref=ref, saved=1) + "#appt"  # opens the appointment tab
     if tk["anonymous"]:
         abort(400)
+    if core.is_shared_view(u, tk):
+        # the ticket is still at Employee Care: a booking would land in Care's calendar, so claim it first
+        session["appt_err"] = "اسحب التذكرة لقسمك أولًا، ثم احجز الموعد في جدول قسمك."
+        return redirect(back)
     if action == "book":
         if tk["status"] not in core.OPEN_STATUSES:
             abort(400)
@@ -440,6 +452,10 @@ def appt_staff_action(ref):
         if con.in_transaction:
             con.commit()
         con.execute("BEGIN IMMEDIATE")
+        ap = active(con, tk["id"])  # again, inside the lock: a parallel booking may have just created one
+        if ap and not (ap["kind"] == "appointment" and ap["status"] in reschedulable):
+            con.rollback()
+            return redirect(back)
         free = dict(day_slots(con, d, dt.date(), ignore_id=ap["id"] if ap else None)) if dt else {}
         if not dt or free.get(slot, 0) <= 0:
             con.rollback()
@@ -647,7 +663,7 @@ def status_ctx(con, tk, lang):
 def walkin_offer(con, tk, lang):
     """After a walk-in creates a request at the device: join the queue, or (closed / busy) request an appointment."""
     d = dept_by_id(tk["dept_id"])
-    if not d or tk["anonymous"] or tk["req_type"] != "request":
+    if not d or tk["anonymous"] or tk["req_type"] != "request" or not cfg(d)["enabled"]:
         return {}
     is_open, why = open_now(con, d)
     waiting = len(queue_today(con, d["id"]))
@@ -743,11 +759,12 @@ def kiosk_checkin():
 
 
 # ---------------------------------------------------------------- indicators
-def stats(con, lo, hi, dept_id=None):
-    """Appointment and queue figures for appointments created in [lo, hi) (UTC strings, like tickets)."""
+def stats(con, lo, hi, ticket_sql="", ticket_params=()):
+    """Appointment and queue figures for appointments created in [lo, hi) (UTC strings, like tickets),
+    for the tickets selected by ticket_sql (" WHERE ..." on tickets) – the same tickets as the rest of the page."""
     w, a = ["a.created_at>=? AND a.created_at<?"], [lo, hi]
-    if dept_id:
-        w.append("a.dept_id=?"); a.append(dept_id)
+    if ticket_sql:
+        w.append("a.ticket_id IN (SELECT id FROM tickets" + ticket_sql + ")"); a.extend(ticket_params)
     rows = con.execute("SELECT a.* FROM appointments a WHERE " + " AND ".join(w), a).fetchall()
     appts = [r for r in rows if r["kind"] == "appointment"]
     walk = [r for r in rows if r["kind"] == "walkin"]

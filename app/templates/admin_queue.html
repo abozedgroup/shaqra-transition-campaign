@@ -18,7 +18,7 @@
     </div>
   </header>
 
-  <p class="qp-info">{% if is_open %}<span class="state-pill on">يستقبل الآن</span>{% else %}<span class="state-pill off">{{ {'weekend':'عطلة نهاية الأسبوع','closed':'القسم مغلق اليوم','hours':'خارج ساعات الاستقبال'}.get(why, why) }}</span>{% endif %}
+  <p class="qp-info">{% if is_open %}<span class="state-pill on">يستقبل الآن</span>{% else %}<span class="state-pill off">{{ {'weekend':'عطلة نهاية الأسبوع أو عطلة رسمية','closed':'القسم مغلق اليوم','hours':'خارج ساعات الاستقبال','off':'المواعيد والانتظار موقوفة لهذا القسم'}.get(why, why) }}</span>{% endif %}
     <span>الاستقبال {{ d.appt_start }} – {{ d.appt_end }}</span><span>موعد كل {{ c.slot }} د</span><span>{{ c.cap }} {{ 'شباك' if c.cap == 1 else 'شبابيك' }}</span><span>متوسط الخدمة {{ avg|round|int }} د</span>{% if c.location %}<span>{{ c.location }}</span>{% endif %}</p>
 
   {% if err %}<div class="warn" role="alert">{{ err }}</div>{% endif %}

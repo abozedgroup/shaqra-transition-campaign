@@ -7,12 +7,13 @@
   <header class="tl-head"><h1>تسجيل مراجع حضر إليك مباشرة</h1></header>
   <div class="next-step" role="note">لمن دخل عليك مباشرة دون جهاز الاستقبال: سجّله هنا في أقل من دقيقة لتُحسب زيارته في المؤشرات ويُتابَع طلبه.
     تُسجَّل التذكرة في <b>{{ dept.name_ar if dept else 'العناية بالموظفين' }}</b> باسمك، بقناة «مباشر عند الموظف».</div>
+  {% if blocked %}<div class="warn" role="alert">قسمك موقوف حاليًا، فلا يمكن تسجيل مراجعين باسمه. راجع المشرف العام.</div>{% else %}
   {% if err %}<div class="warn" role="alert">راجع الحقول المعلّمة أدناه.</div>{% endif %}
   <form class="card quick-form" method="post" action="/admin/quick" autocomplete="off" novalidate>
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <fieldset class="q-out">
       <legend>ماذا تم مع المراجع؟</legend>
-      {% for k, label in outcomes.items() %}
+      {% for k, label in outcomes.items() if k != 'appt' or appt_on %}
       <label class="q-opt"><input type="radio" name="outcome" value="{{ k }}" {% if v.outcome == k %}checked{% endif %} required>
         <span><b>{{ label }}</b><small>{% if k == 'done' %}تُنهى التذكرة فورًا ويُدعى للتقييم{% elif k == 'follow' %}تبقى مفتوحة باسمك حتى تنهيها{% else %}تنتقل بعد الحفظ إلى حجز الموعد{% endif %}</small></span></label>
       {% endfor %}
@@ -30,6 +31,7 @@
     <div class="field"><label for="q-reply">ما تم <span class="opt">(اختياري – يظهر للمراجع عند متابعة طلبه إن أُنهيت الخدمة)</span></label><textarea id="q-reply" name="reply" rows="2" maxlength="3000" placeholder="مثال: زُوّد بتعريف بالراتب.">{{ v.reply or '' }}</textarea></div>
     <div class="q-actions"><button class="btn solid" type="submit">حفظ وتسجيل</button> <a class="btn" href="/admin">إلغاء</a></div>
   </form>
+  {% endif %}
 </div></section>
 {% endblock %}
 {% block scripts %}<script src="/app-static/admin.js"></script>{% endblock %}

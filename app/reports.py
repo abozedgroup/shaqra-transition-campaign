@@ -208,14 +208,18 @@ def sheet_tickets(wb, sql, params):
         hrs = core._hours(r["created_at"], fin) if fin else None
         late = r["status"] in core.OPEN_STATUSES and r["due_at"] and r["due_at"] < now
         anon = bool(r["anonymous"])
+        # anonymous rows: dates only and no duration (any clock time could be combined to recover the visit time)
+        when = (lambda v: (local_dt(v).date() if local_dt(v) else None)) if anon else local_dt
         created = local_dt(r["created_at"])
+        if anon:
+            hrs = None
         out.append([
             r["ref"], created.date() if (anon and created) else created, STATUSES.get(r["status"], r["status"]),
             REQ_TYPES.get(r["req_type"], r["req_type"]), tn.get(r["topic"], r["topic"]), dn.get(r["dept_id"], ""),
             "" if anon else CHANNELS.get(r["channel"], r["channel"]), "نعم" if anon else "", r["name"], r["emp_no"], r["mobile"],
-            r["email"], r["facility"], r["job_cat"], users.get(r["assigned_user_id"], ""), local_dt(r["due_at"]),
-            "نعم" if late or r["sla_breached"] else "", local_dt(r["first_response_at"]), local_dt(r["resolved_at"]),
-            local_dt(r["closed_at"]), CLOSE_REASONS.get(r["close_reason"], "") if r["status"] == "closed" else "",
+            r["email"], r["facility"], r["job_cat"], users.get(r["assigned_user_id"], ""), when(r["due_at"]),
+            "نعم" if late or r["sla_breached"] else "", when(r["first_response_at"]), when(r["resolved_at"]),
+            when(r["closed_at"]), CLOSE_REASONS.get(r["close_reason"], "") if r["status"] == "closed" else "",
             r["rating"], round(hrs, 1) if hrs is not None else None, "نعم" if r["id"] in esc else "",
             r["message"], r["reply"]])
     ws = new_sheet(wb, "التذاكر")
@@ -281,7 +285,7 @@ def sheet_events(wb, sql, params):
     out = []
     for r in rows:
         at = local_dt(r["at"])
-        hide = r["anonymous"] and r["kind"] in ("create", "rating")
+        hide = r["anonymous"]  # every event of an anonymous ticket: date only
         out.append([r["ref"], at.date() if (hide and at) else at, r["actor"], core.EVENT_KINDS.get(r["kind"], r["kind"]),
                     dn.get(r["from_dept"], ""), dn.get(r["to_dept"], ""), r["text"]])
     ws = new_sheet(wb, "سجل الإجراءات")

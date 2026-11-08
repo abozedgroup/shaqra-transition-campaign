@@ -60,10 +60,10 @@
         <details class="inline-edit dp-edit"><summary>تعديل</summary>
           <form method="post" action="/admin/departments" class="rowform">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="id" value="{{ d.id }}">
-            <div class="field"><label>الاسم</label><input type="text" name="name_ar" value="{{ d.name_ar }}" maxlength="60" required></div>
-            <div class="field"><label>بالإنجليزية</label><input type="text" name="name_en" value="{{ d.name_en }}" maxlength="80" dir="ltr"></div>
-            <div class="field"><label>المهلة (أيام عمل)</label><input type="number" name="sla_days" value="{{ d.sla_days }}" min="1" max="30"></div>
-            <div class="field"><label>الترتيب</label><input type="number" name="sort" value="{{ d.sort }}" min="0" max="9999"></div>
+            <div class="field"><label for="f-name_ar-{{ d.id }}">الاسم</label><input type="text" id="f-name_ar-{{ d.id }}" name="name_ar" value="{{ d.name_ar }}" maxlength="60" required></div>
+            <div class="field"><label for="f-name_en-{{ d.id }}">بالإنجليزية</label><input type="text" id="f-name_en-{{ d.id }}" name="name_en" value="{{ d.name_en }}" maxlength="80" dir="ltr"></div>
+            <div class="field"><label for="f-sla_days-{{ d.id }}">المهلة (أيام عمل)</label><input type="number" id="f-sla_days-{{ d.id }}" name="sla_days" value="{{ d.sla_days }}" min="1" max="30"></div>
+            <div class="field"><label for="f-sort-{{ d.id }}">الترتيب</label><input type="number" id="f-sort-{{ d.id }}" name="sort" value="{{ d.sort }}" min="0" max="9999"></div>
             {% if d.key not in system %}
             <label class="chk"><input type="checkbox" name="selectable" value="1" {% if d.selectable %}checked{% endif %}> <span>يظهر للموظف كموضوع</span></label>
             <label class="chk"><input type="checkbox" name="active" value="1" {% if d.active %}checked{% endif %}> <span>مفعّل</span></label>

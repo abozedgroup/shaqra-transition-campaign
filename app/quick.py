@@ -9,6 +9,7 @@ Tickets are recorded with channel "direct" ("مباشر عند الموظف") an
 from flask import redirect, render_template, request, session, url_for
 
 import app as core
+import appointments
 from app import (EMAIL_RE, EMPNO_RE, INTAKE_KEY, MOBILE_RE, RATE_WINDOW_DAYS, add_workdays, app, check_csrf, clean,
                  current_user, db, dept_by_id, dept_by_key, fmt_dt, is_admin_user, log_event, login_required,
                  new_follow_code, follow_hash, new_ref, now_utc, topic_opts)
@@ -17,11 +18,18 @@ OUTCOMES = {"done": "انتهت الخدمة الآن", "follow": "تحتاج م
 
 
 def _section(u):
-    d = dept_by_id(u["dept_id"]) if u["dept_id"] else None
-    return d if d and d["active"] else dept_by_key(INTAKE_KEY)
+    """The staff member's own section (admins without one: Employee Care); None if their section is suspended."""
+    if not u["dept_id"]:
+        return dept_by_key(INTAKE_KEY)
+    d = dept_by_id(u["dept_id"])
+    return d if d and d["active"] else None
 
 
-def _validate(form, u):
+def _appt_on(dept):
+    return bool(dept and appointments.cfg(dept)["enabled"])
+
+
+def _validate(form, u, dept):
     v, err = {}, {}
     v["name"] = clean(form.get("name"), 80)
     if len(v["name"]) < 2 or "\n" in v["name"]:
@@ -44,6 +52,8 @@ def _validate(form, u):
     v["outcome"] = form.get("outcome", "")
     if v["outcome"] not in OUTCOMES:
         err["outcome"] = "اختر ما تم مع المراجع."
+    elif v["outcome"] == "appt" and not _appt_on(dept):
+        err["outcome"] = "المواعيد موقوفة لقسمك؛ اختر «تحتاج متابعة»."
     v["reply"] = clean(form.get("reply"), 3000)
     return v, err
 
@@ -54,9 +64,12 @@ def admin_quick():
     u = current_user()
     dept = _section(u)
     v, err = {}, {}
+    if not dept:
+        return render_template("admin_quick.html", v=v, err={}, dept=None, outcomes=OUTCOMES, topics=[],
+                               admin=is_admin_user(u), appt_on=False, blocked=True), 409
     if request.method == "POST":
         check_csrf()
-        v, err = _validate(request.form, u)
+        v, err = _validate(request.form, u, dept)
         if not err:
             con = db()
             actor = "%s (%s)" % (u["display_name"], u["username"])
@@ -80,6 +93,10 @@ def admin_quick():
                 tid = cur.lastrowid
                 log_event(con, tid, actor, "create", "مراجع مباشر عند الموظف – " + OUTCOMES[v["outcome"]],
                           to_dept=dept["id"])
+                if v["outcome"] == "appt":
+                    # recorded as a request in the section's queue page, even if nobody books it right away
+                    tk = con.execute("SELECT * FROM tickets WHERE id=?", (tid,)).fetchone()
+                    appointments.create_request(con, tk, "", "staff")
                 if done:
                     log_event(con, tid, actor, "reply", reply)
                     log_event(con, tid, actor, "resolve",
@@ -95,7 +112,8 @@ def admin_quick():
         if dept and dept["key"] in [k for k, _ in topic_opts("ar")]:
             v["topic"] = dept["key"]
     return render_template("admin_quick.html", v=v, err=err, dept=dept, outcomes=OUTCOMES,
-                           topics=topic_opts("ar"), admin=is_admin_user(u)), (400 if err else 200)
+                           topics=topic_opts("ar"), admin=is_admin_user(u), appt_on=_appt_on(dept),
+                           blocked=False), (400 if err else 200)
 
 
 def quick_ctx(ref):

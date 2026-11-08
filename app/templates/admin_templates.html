@@ -3,9 +3,9 @@
 {% macro tform(x=none) %}
 <form method="post" action="/admin/templates{% if back %}?back={{ back }}{% endif %}" class="tpl-form">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% if x %}<input type="hidden" name="id" value="{{ x.id }}">{% endif %}
-  <div class="field"><label>العنوان <span class="opt">(يظهر في القائمة)</span></label><input type="text" name="title" maxlength="80" value="{{ x.title if x else '' }}" required></div>
-  {% if me_admin %}<div class="field"><label>متاح لـ</label><select name="scope"><option value="all" {% if x and not x.dept_id %}selected{% endif %}>كل الأقسام</option>{% for d in depts if d.active %}<option value="{{ d.id }}" {% if x and x.dept_id == d.id %}selected{% endif %}>{{ d.name_ar }}</option>{% endfor %}</select></div>{% endif %}
-  <div class="field"><label>نص الرد</label><textarea name="body" maxlength="3000" required>{{ x.body if x else 'السلام عليكم {الاسم}،\n' }}</textarea></div>
+  <div class="field"><label for="f-title-{{ x.id if x else 'new' }}">العنوان <span class="opt">(يظهر في القائمة)</span></label><input type="text" id="f-title-{{ x.id if x else 'new' }}" name="title" maxlength="80" value="{{ x.title if x else '' }}" required></div>
+  {% if me_admin %}<div class="field"><label for="f-scope-{{ x.id if x else 'new' }}">متاح لـ</label><select id="f-scope-{{ x.id if x else 'new' }}" name="scope"><option value="all" {% if x and not x.dept_id %}selected{% endif %}>كل الأقسام</option>{% for d in depts if d.active %}<option value="{{ d.id }}" {% if x and x.dept_id == d.id %}selected{% endif %}>{{ d.name_ar }}</option>{% endfor %}</select></div>{% endif %}
+  <div class="field"><label for="f-body-{{ x.id if x else 'new' }}">نص الرد</label><textarea id="f-body-{{ x.id if x else 'new' }}" name="body" maxlength="3000" required>{{ x.body if x else 'السلام عليكم {الاسم}،\n' }}</textarea></div>
   <div class="actions"><button class="btn solid" type="submit">حفظ</button>
     {% if x %}<button class="btn danger" type="submit" name="action" value="delete" formnovalidate>حذف</button>{% endif %}</div>
 </form>

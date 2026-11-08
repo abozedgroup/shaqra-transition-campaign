@@ -468,14 +468,15 @@ details.more[open] summary{margin-bottom:12px}
 .tl-sel{display:flex;align-items:center;justify-content:center;width:40px;flex:0 0 40px;cursor:pointer;border-inline-end:1px solid var(--line)}
 .tl-sel input{width:18px;height:18px}
 .tl-all{display:inline-flex;gap:8px;align-items:center;margin:0 0 8px;font-size:14px;color:var(--muted);cursor:pointer}
-.bulk-bar{position:sticky;top:8px;z-index:5;display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 12px;margin:0 0 10px;background:#eef5fd;border:1px solid #b9d3f3;border-radius:12px;box-shadow:0 4px 14px rgba(20,50,90,.08)}
+.bulk-bar{z-index:5;display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 12px;margin:0 0 10px;background:#eef5fd;border:1px solid #b9d3f3;border-radius:12px;box-shadow:0 4px 14px rgba(20,50,90,.08)}
 .bulk-bar[hidden]{display:none}
 .bulk-bar input,.bulk-bar select{min-height:38px}
 .bulk-bar input{flex:1 1 200px}
 .tl-item:has(.tl-sel input:checked) .tl-row{background:#f2f7fe}
 .adminnav .nb[hidden]{display:none}
 .sound-t{font-size:13px;padding:4px 10px;min-height:0}
-.pulse-toast{position:fixed;bottom:18px;inset-inline-start:18px;z-index:50;max-width:340px;padding:14px 16px;border-radius:12px;background:#0e2a47;color:#fff;font-weight:700;text-decoration:none;box-shadow:0 10px 30px rgba(0,0,0,.25);transition:opacity .5s,transform .5s}
+.pulse-box{position:fixed;bottom:18px;inset-inline-start:18px;z-index:50;display:flex;flex-direction:column;gap:8px;max-width:min(340px,calc(100vw - 36px))}
+.pulse-toast{display:block;padding:14px 16px;border-radius:12px;background:#0e2a47;color:#fff;font-weight:700;text-decoration:none;box-shadow:0 10px 30px rgba(0,0,0,.25);transition:opacity .5s,transform .5s}
 .pulse-toast:hover{background:#163c63}
 .pulse-toast.out{opacity:0;transform:translateY(10px)}
 @media (prefers-reduced-motion:reduce){.pulse-toast{transition:none}}
@@ -483,3 +484,4 @@ details.more[open] summary{margin-bottom:12px}
 .hol-list li{display:flex;gap:8px;align-items:center;justify-content:space-between;padding:6px 10px;border:1px solid var(--line);border-radius:8px}
 .hol-list form{margin:0}
 .linkbtn{background:none;border:0;padding:0;color:#b03a2e;cursor:pointer;font:inherit;text-decoration:underline}
+@media (min-width:700px){.bulk-bar{position:sticky;top:8px}}

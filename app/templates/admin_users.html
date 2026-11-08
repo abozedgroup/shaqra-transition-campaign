@@ -8,10 +8,10 @@
   <details class="inline-edit ul-edit"><summary>تعديل</summary>
     <form method="post" action="/admin/users" class="rowform">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="id" value="{{ x.id }}">
-      <div class="field"><label>الاسم</label><input type="text" name="display_name" value="{{ x.display_name }}" maxlength="60" required></div>
-      <div class="field"><label>الصلاحية</label><select name="role">{% for k,l in roles.items() %}<option value="{{k}}" {% if x.role==k %}selected{% endif %}>{{l}}</option>{% endfor %}</select></div>
-      <div class="field"><label>القسم</label><select name="dept_id"><option value="">—</option>{% for d in depts %}<option value="{{ d.id }}" {% if x.dept_id==d.id %}selected{% endif %}>{{ d.name_ar }}</option>{% endfor %}</select></div>
-      <div class="field"><label>كلمة مرور جديدة <span class="opt">(اتركها فارغة للإبقاء)</span></label><input type="text" name="password" dir="ltr" class="ltr-field" autocomplete="off" minlength="10"></div>
+      <div class="field"><label for="f-display_name-{{ x.id }}">الاسم</label><input type="text" id="f-display_name-{{ x.id }}" name="display_name" value="{{ x.display_name }}" maxlength="60" required></div>
+      <div class="field"><label for="f-role-{{ x.id }}">الصلاحية</label><select id="f-role-{{ x.id }}" name="role">{% for k,l in roles.items() %}<option value="{{k}}" {% if x.role==k %}selected{% endif %}>{{l}}</option>{% endfor %}</select></div>
+      <div class="field"><label for="f-dept_id-{{ x.id }}">القسم</label><select id="f-dept_id-{{ x.id }}" name="dept_id"><option value="">—</option>{% for d in depts %}<option value="{{ d.id }}" {% if x.dept_id==d.id %}selected{% endif %}>{{ d.name_ar }}</option>{% endfor %}</select></div>
+      <div class="field"><label for="f-password-{{ x.id }}">كلمة مرور جديدة <span class="opt">(اتركها فارغة للإبقاء)</span></label><input type="text" id="f-password-{{ x.id }}" name="password" dir="ltr" class="ltr-field" autocomplete="off" minlength="10"></div>
       <label class="chk"><input type="checkbox" name="active" value="1" {% if x.active %}checked{% endif %}> <span>مفعّل</span></label>
       <button class="btn solid" type="submit">حفظ</button>
     </form>

@@ -4,7 +4,7 @@
 {% set is_late = tk.status in open_statuses and tk.due_at and tk.due_at < now %}
 {% set is_open = tk.status in open_statuses %}
 {% set appt_live = appt and appt.status not in ('done','no_show','cancelled') %}
-{% set can_appt = not tk.anonymous and appt_dept %}
+{% set can_appt = not tk.anonymous and appt_dept and not shared %}
 {# which action tab opens first #}
 {% if request.args.get('appt_day') or (appt_live and appt.status in ('requested','change_requested','checked_in','serving')) %}{% set tab0 = 'appt' %}{% else %}{% set tab0 = 'reply' %}{% endif %}
 <section class="s adm tk-page"><div class="wrap wide">
@@ -24,7 +24,7 @@
       <span><b>القسم:</b> {{ dept_names.get(tk.dept_id, '—') }}</span>
       <span><b>المسؤول:</b> {{ assignee.display_name if assignee else 'لم يُستلم بعد' }}
         {% if is_open and me.id and tk.assigned_user_id != me.id %}<form method="post" action="/admin/t/{{ tk.ref }}" class="inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="take"><button class="btn small" type="submit">استلامها</button></form>{% endif %}</span>
-      <span>{% if tk.status == 'closed' %}<b>أُغلقت:</b> {{ tk.closed_at|dt if tk.closed_at else '' }}
+      <span>{% if tk.status == 'closed' %}<b>أُغلقت:</b> {{ (tk.closed_at|day if tk.anonymous else tk.closed_at|dt) if tk.closed_at else '' }}
         {% elif tk.status == 'resolved' %}<b>التقييم حتى:</b> {{ tk.rate_due_at|dt }}
         {% elif is_late %}<b class="late-txt">متأخرة</b> – كانت المهلة {{ tk.due_at|dt }}
         {% else %}<b>المهلة:</b> {{ tk.due_at|dt if tk.due_at else '—' }}{% endif %}</span>
@@ -45,7 +45,7 @@
   {% if err %}<div class="warn" role="alert">{{ err }}</div>{% endif %}
 
   {% if shared and tk.status in open_statuses %}
-  <div class="next-step ns-shared" role="note"><b>تذكرة مشتركة:</b> هي لدى <b>العناية بالموظفين</b> وموضوعها من اختصاص قسمك، فتظهر للفريقين. يمكنك معالجتها هنا مباشرة، أو سحبها لقسمك لتصبح مسؤوليته.
+  <div class="next-step ns-shared" role="note"><b>تذكرة مشتركة:</b> هي لدى <b>العناية بالموظفين</b> وموضوعها من اختصاص قسمك، فتظهر للفريقين. يمكنك الرد عليها هنا مباشرة، أو سحبها لقسمك لتصبح مسؤوليته (ولحجز موعد لها في جدول قسمك).
     <form method="post" action="/admin/t/{{ tk.ref }}" class="inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="claim"><button class="btn small solid" type="submit">سحبها لقسمي</button></form></div>
   {% endif %}
   {# ---------- what to do next ---------- #}
@@ -95,7 +95,7 @@
               <a class="small-link" href="/admin/templates?back={{ tk.ref }}">إدارة الردود الجاهزة</a>
             </div>
             <div class="field"><label for="reply">الرد <span class="opt">(يظهر للموظف في صفحة «متابعة طلبي»)</span></label>
-              <textarea id="reply" name="reply" maxlength="3000" data-draft="reply-{{ tk.ref }}">{{ tk.reply }}</textarea>
+              <textarea id="reply" name="reply" maxlength="3000" data-draft="reply-{{ tk.ref }}" data-user="{{ me.id }}">{{ tk.reply }}</textarea>
               <small class="hint draft-note" hidden>استُعيدت مسودة لم تُرسل.</small></div>
             {% set st_ph = photos|selectattr('source','equalto','staff')|list %}
             {% if st_ph %}<p class="hint">صور مرفقة مع الرد:</p><div class="photos">{% for ph in st_ph %}<a href="/admin/f/{{ ph.token }}" target="_blank" rel="noopener"><img src="/admin/f/{{ ph.token }}" alt="مرفق الرد {{ loop.index }}" loading="lazy"></a>{% endfor %}</div>{% endif %}
@@ -161,12 +161,12 @@
         <details class="attach note-add"><summary>+ إضافة ملاحظة داخلية <span class="opt">(لا تظهر للموظف)</span></summary>
           <form method="post" action="/admin/t/{{ tk.ref }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="note">
-            <div class="field"><textarea id="note" name="note" maxlength="3000" class="short" aria-label="الملاحظة الداخلية" data-draft="note-{{ tk.ref }}"></textarea></div>
+            <div class="field"><textarea id="note" name="note" maxlength="3000" class="short" aria-label="الملاحظة الداخلية" data-draft="note-{{ tk.ref }}" data-user="{{ me.id }}"></textarea></div>
             <button class="btn" type="submit">إضافة الملاحظة</button>
           </form></details>
         <ol class="timeline">
           {% for e in events|reverse %}
-          <li class="k-{{ e.kind }}"><div class="meta">{{ e.at|day if (tk.anonymous and e.kind in ('create','rating')) else e.at|dt }} · {{ e.actor }} · <b>{{ kinds.get(e.kind, e.kind) }}</b>
+          <li class="k-{{ e.kind }}"><div class="meta">{{ e.at|day if tk.anonymous else e.at|dt }} · {{ e.actor }} · <b>{{ kinds.get(e.kind, e.kind) }}</b>
             {% if e.kind=='escalate' %}: من {{ dept_names.get(e.from_dept, '—') }} إلى {{ dept_names.get(e.to_dept, '—') }}{% elif e.kind=='create' %}: إلى {{ dept_names.get(e.to_dept, '—') }}{% endif %}</div>
             {% if e.text %}<div class="txt">{{ e.text }}</div>{% endif %}</li>
           {% endfor %}
@@ -208,7 +208,7 @@
           {% if not tk.anonymous %}<dt>القناة</dt><dd>{{ channels.get(tk.channel, tk.channel) }}</dd>
           <dt>اللغة</dt><dd>{{ "English" if tk.lang=='en' else "العربية" }}</dd>{% endif %}
           <dt>التقديم</dt><dd>{% if tk.anonymous %}{{ tk.created_at|day }} <small class="hint">(الوقت مخفي)</small>{% else %}{{ tk.created_at|dt }}{% endif %}</dd>
-          <dt>آخر تحديث</dt><dd>{{ tk.updated_at|dt }}</dd>
+          <dt>آخر تحديث</dt><dd>{{ tk.updated_at|day if tk.anonymous else tk.updated_at|dt }}</dd>
         </dl>
       </section>
 

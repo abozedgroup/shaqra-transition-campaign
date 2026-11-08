@@ -68,8 +68,8 @@
       <option value="close">إغلاقها دون تقييم</option>
     </select>
     <select name="to_dept" aria-label="القسم" data-bulk-for="refer" hidden>{% for d in active_depts %}<option value="{{ d.id }}">{{ d.name_ar }}</option>{% endfor %}</select>
-    <input type="text" name="reason" maxlength="2000" placeholder="سبب الإحالة" aria-label="سبب الإحالة" data-bulk-for="refer" hidden>
-    <input type="text" name="close_note" maxlength="1000" placeholder="سبب الإغلاق (مثل: مكررة)" aria-label="سبب الإغلاق" data-bulk-for="close" hidden>
+    <input type="text" name="reason" minlength="5" maxlength="2000" placeholder="سبب الإحالة" aria-label="سبب الإحالة" data-bulk-for="refer" hidden>
+    <input type="text" name="close_note" minlength="3" maxlength="1000" placeholder="سبب الإغلاق (مثل: مكررة)" aria-label="سبب الإغلاق" data-bulk-for="close" hidden>
     <button class="btn solid" type="submit">تنفيذ</button>
     <button class="btn" type="button" data-bulk-clear>إلغاء التحديد</button>
   </form>
