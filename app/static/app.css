@@ -31,7 +31,7 @@
 
 /* topic + anonymous */
 .anonbox{background:var(--soft);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
-.js .anonbox.off{display:none}
+.js .anonbox.off,.anonbox.off{display:none}
 .anon-only,.anon-inline{display:none}
 .anon .anon-only{display:block}.anon .anon-inline{display:inline}.anon .pi,.anon .pi-inline{display:none}
 /* staff dashboard */
@@ -146,3 +146,7 @@ div.kpi{cursor:default}
 .legend .sw{display:inline-block;width:12px;height:12px;border-radius:3px;margin-inline-end:6px;vertical-align:-1px}
 .legend .sw.s1{background:#2a78d6}.legend .sw.s2{background:#eb6834}
 .stars label span{display:flex;flex-direction:column;align-items:center;gap:4px}
+.k-chosen{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px}
+.k-chosen h1{margin:0}
+.k-change{font-size:18px;font-weight:700;color:var(--navy);padding:8px 16px;border:2px solid var(--line);border-radius:12px;text-decoration:none}
+.k-chosen-help{font-size:17px;margin:6px 0 18px}

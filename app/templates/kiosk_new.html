@@ -1,20 +1,25 @@
 {% extends "kiosk_base.html" %}
 {% macro fld_err(n) %}<span class="err" id="e-{{ n }}">{{ errors[n] if n in errors else err_msgs.get(n, '') }}</span>{% endmacro %}
-{% block title %}{{ t.k_new_h }}{% endblock %}
+{% set chosen = (types|selectattr(0,'equalto',v.req_type)|list|first) if v.req_type else none %}
+{% block title %}{{ chosen[1] if chosen else t.k_new_h }}{% endblock %}
 {% block idle %}180{% endblock %}
 {% block body %}
 <div class="k-card">
-  <h1>{{ t.k_new_h }}</h1>
+  {% if chosen %}
+  <div class="k-chosen"><h1>{{ chosen[1] }}</h1><a class="k-change" href="{{ kpre }}">{{ t.k_change }}</a></div>
+  <p class="hint k-chosen-help">{{ chosen[2] }}</p>
+  {% else %}<h1>{{ t.k_new_h }}</h1>{% endif %}
   {% if errors %}<div class="warn errsum" role="alert" id="errsum" tabindex="-1"><b>{{ t.errsum }}</b>
     <ul>{% for n in err_order if n in errors %}<li><a href="#{{ 'type-first' if n=='req_type' else n }}">{{ errors[n] }}</a></li>{% endfor %}</ul></div>{% endif %}
   <form class="k-form{% if v.anonymous %} anon{% endif %}" id="kf" method="post" action="{{ kpre }}/new" novalidate data-anon-types="{{ anon_types|join(',') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {% if chosen %}<input type="hidden" name="req_type" value="{{ chosen[0] }}">{% else %}
     <div class="field {% if errors.req_type %}bad{% endif %}" id="g-req_type">
       <span class="legend" id="lg-type">{{ t.lbl_type }}</span>
       <div class="types" role="radiogroup" aria-labelledby="lg-type">
         {% for k, lbl, help in types %}<label class="type2"><input type="radio" name="req_type" value="{{ k }}" {% if loop.first %}id="type-first"{% endif %} {% if v.req_type==k %}checked{% endif %}> <span><b>{{ lbl }}</b><small>{{ help }}</small></span></label>{% endfor %}
       </div>{{ fld_err('req_type') }}
-    </div>
+    </div>{% endif %}
     <div class="field {% if errors.topic %}bad{% endif %}" id="g-topic"><label for="topic">{{ t.lbl_topic }}</label>
       <select id="topic" name="topic" required><option value="">{{ t.choose }}</option>{% for k, lbl in topics %}<option value="{{ k }}" {% if v.topic==k %}selected{% endif %}>{{ lbl }}</option>{% endfor %}</select>{{ fld_err('topic') }}</div>
     <div class="field anonbox" id="anonbox">

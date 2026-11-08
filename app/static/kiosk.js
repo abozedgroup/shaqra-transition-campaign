@@ -14,7 +14,7 @@
   var f = document.getElementById('kf');
   if (f) {
     var types = (f.getAttribute('data-anon-types') || '').split(','), box = document.getElementById('anonbox'), chk = f.elements.anonymous;
-    var cur = function () { var r = f.querySelector('input[name=req_type]:checked'); return r ? r.value : ''; };
+    var cur = function () { var r = f.querySelector('input[name=req_type]:checked') || f.querySelector('input[type=hidden][name=req_type]'); return r ? r.value : ''; };
     var sync = function () {
       var ok = types.indexOf(cur()) >= 0;
       if (box) box.classList.toggle('off', !ok);
