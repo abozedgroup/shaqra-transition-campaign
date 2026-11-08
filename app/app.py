@@ -1683,8 +1683,18 @@ def admin_departments():
             con.commit()
             msg = "تمت إضافة القسم."
     counts = {r[0]: r[1] for r in con.execute("SELECT dept_id, COUNT(*) FROM users WHERE active=1 GROUP BY dept_id")}
-    return render_template("admin_departments.html", depts=all_depts(), counts=counts, err=err, msg=msg,
-                           system=(INTAKE_KEY, COMPLAINTS_KEY))
+    staff = {}
+    for r in con.execute("SELECT dept_id, display_name FROM users WHERE active=1 AND role='staff' ORDER BY display_name"):
+        staff.setdefault(r[0], []).append(r[1])
+    osql, oarg = _overdue_sql()
+    opens = {r[0]: (r[1], r[2]) for r in con.execute(
+        "SELECT dept_id, SUM(status IN ('new','escalated','in_progress')), SUM(" + osql + ") FROM tickets GROUP BY dept_id",
+        [oarg])}
+    depts = all_depts()
+    no_staff = [d for d in depts if d["active"] and not staff.get(d["id"])]
+    return render_template("admin_departments.html", depts=depts, counts=counts, staff=staff, opens=opens,
+                           no_staff=no_staff, err=err, msg=msg, system=(INTAKE_KEY, COMPLAINTS_KEY),
+                           add_open=bool(err) and not request.form.get("id"))
 
 
 # ---------------------------------------------------------------- user accounts
@@ -1742,9 +1752,22 @@ def admin_users():
                 msg = "تم إنشاء الحساب. أعطِ الموظف اسم المستخدم وكلمة المرور، ويستطيع تغييرها بعد الدخول."
     users = con.execute("SELECT * FROM users ORDER BY active DESC, role, dept_id, display_name").fetchall()
     depts = all_depts()
-    return render_template("admin_users.html", users=users, depts=depts,
+    active = [x for x in users if x["active"]]
+    groups = [("المشرفون العامّون", None, [x for x in active if x["role"] == "admin"])]
+    for d in depts:
+        members = [x for x in active if x["role"] == "staff" and x["dept_id"] == d["id"]]
+        if members or d["active"]:
+            groups.append((d["name_ar"], d, members))
+    orphan = [x for x in active if x["role"] == "staff" and not any(x["dept_id"] == d["id"] for d in depts)]
+    if orphan:
+        groups.append(("بلا قسم", None, orphan))
+    never = [x for x in active if not x["last_login"]]
+    return render_template("admin_users.html", users=users, depts=depts, groups=groups,
+                           suspended=[x for x in users if not x["active"]], never=never,
+                           empty_depts=[g for g in groups if g[1] and g[1]["active"] and not g[2]],
                            dept_names={d["id"]: d["name_ar"] for d in depts}, err=err, msg=msg,
-                           suggested=secrets.token_urlsafe(9))
+                           suggested=secrets.token_urlsafe(9), pre_dept=as_id(request.args.get("dept")),
+                           add_open=(bool(err) and not request.form.get("id")) or bool(request.args.get("dept")))
 
 
 @app.route("/admin/kiosks", methods=["GET", "POST"])

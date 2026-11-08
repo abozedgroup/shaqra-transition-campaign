@@ -1,44 +1,75 @@
 {% extends "base.html" %}
 {% block title %}الأقسام{% endblock %}
 {% block body %}
-<section class="s adm"><div class="wrap wide">
+<section class="s adm dp-page"><div class="wrap wide">
   {% set anav='depts' %}{% include "_adminnav.html" %}
-  <h1 class="h1s">الأقسام</h1>
-  <p class="hint">«يختاره الموظف» يعني أن القسم يظهر للموظف في قائمة «موضوع الطلب». قسما العناية بالموظفين والشكاوى أساسيان: الأول يستقبل كل الطلبات، والثاني يستقبل الشكاوى والملاحظات والاقتراحات، ولا يمكن إيقافهما.</p>
-  {% if msg %}<div class="okmsg">{{ msg }}</div>{% endif %}
+  <header class="tl-head">
+    <h1>الأقسام <span class="n-plain">({{ depts|selectattr('active')|list|length }} مفعّلة)</span></h1>
+    <a class="btn solid" href="#add" data-open="add">+ إضافة قسم</a>
+  </header>
+  {% if msg %}<div class="okmsg" role="status">{{ msg }}</div>{% endif %}
   {% if err %}<div class="warn" role="alert">{{ err }}</div>{% endif %}
-  <div class="tablewrap"><table class="tbl">
-    <thead><tr><th>القسم</th><th>بالإنجليزية</th><th>المهلة</th><th>يختاره الموظف</th><th>الحالة</th><th>الحسابات</th><th>تعديل</th></tr></thead>
-    <tbody>{% for d in depts %}<tr>
-      <td><b>{{ d.name_ar }}</b>{% if d.key in system %} <span class="anon-tag">أساسي</span>{% endif %}</td><td dir="ltr">{{ d.name_en }}</td>
-      <td>{{ d.sla_days }} أيام عمل</td><td>{{ 'نعم' if d.selectable else 'لا' }}</td><td>{{ 'مفعّل' if d.active else 'موقوف' }}</td>
-      <td>{{ counts.get(d.id, 0) }}</td>
-      <td class="wrap"><details class="edit"><summary>تعديل</summary>
-        <form method="post" action="/admin/departments" class="rowform">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="id" value="{{ d.id }}">
-          <div class="field"><label>الاسم</label><input type="text" name="name_ar" value="{{ d.name_ar }}" maxlength="60" required></div>
-          <div class="field"><label>بالإنجليزية</label><input type="text" name="name_en" value="{{ d.name_en }}" maxlength="80" dir="ltr"></div>
-          <div class="field"><label>المهلة (أيام عمل)</label><input type="number" name="sla_days" value="{{ d.sla_days }}" min="1" max="30"></div>
-          <div class="field"><label>الترتيب</label><input type="number" name="sort" value="{{ d.sort }}" min="0" max="9999"></div>
-          {% if d.key not in system %}
-          <label class="chk"><input type="checkbox" name="selectable" value="1" {% if d.selectable %}checked{% endif %}> <span>يختاره الموظف</span></label>
-          <label class="chk"><input type="checkbox" name="active" value="1" {% if d.active %}checked{% endif %}> <span>مفعّل</span></label>
-          {% endif %}
-          <button class="btn solid" type="submit">حفظ</button>
-        </form></details></td>
-    </tr>{% endfor %}</tbody></table></div>
 
-  <form class="panel mt18" method="post" action="/admin/departments">
-    <h3>إضافة قسم</h3>
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <div class="rowform">
+  {% if no_staff %}
+  <div class="next-step ns-warn" role="note"><b>يحتاج انتباهًا:</b> {{ no_staff|length }} {{ 'قسم' if no_staff|length in (1, 2) or no_staff|length > 10 else 'أقسام' }} بلا أي موظف، فلن يعالج أحد التذاكر المحالة إليها:
+    {% for d in no_staff %}<a href="/admin/users?dept={{ d.id }}#add">{{ d.name_ar }}</a>{{ '، ' if not loop.last }}{% endfor %}.
+    اضغط اسم القسم لإضافة موظف له.</div>
+  {% else %}
+  <div class="next-step" role="note">كل الأقسام المفعّلة لها موظفون. <b>القسمان الأساسيان</b> (العناية بالموظفين، والشكاوى) يستقبلان الطلبات أولًا ولا يمكن إيقافهما.</div>
+  {% endif %}
+
+  <details class="card add-card" id="add" {% if add_open %}open{% endif %}>
+    <summary class="card-h">إضافة قسم جديد</summary>
+    <form method="post" action="/admin/departments" class="rowform">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="field"><label for="na">اسم القسم</label><input type="text" id="na" name="name_ar" maxlength="60" required></div>
       <div class="field"><label for="ne">بالإنجليزية <span class="opt">(لصفحة الموظف الإنجليزية)</span></label><input type="text" id="ne" name="name_en" maxlength="80" dir="ltr"></div>
       <div class="field"><label for="sd">المهلة (أيام عمل)</label><input type="number" id="sd" name="sla_days" value="3" min="1" max="30"></div>
-      <div class="field"><label for="so">الترتيب</label><input type="number" id="so" name="sort" value="100" min="0" max="9999"></div>
-      <label class="chk"><input type="checkbox" name="selectable" value="1" checked> <span>يختاره الموظف كموضوع</span></label>
+      <div class="field"><label for="so">الترتيب في القوائم</label><input type="number" id="so" name="sort" value="100" min="0" max="9999"></div>
+      <label class="chk"><input type="checkbox" name="selectable" value="1" checked> <span>يظهر للموظف كموضوع للطلب</span></label>
       <button class="btn solid" type="submit">إضافة</button>
-    </div>
-  </form>
+    </form>
+    <p class="hint">بعد الإضافة أضف موظفًا للقسم من صفحة «الحسابات»، واضبط مكان مواعيده من «المواعيد والانتظار».</p>
+  </details>
+
+  <div class="dp-list">
+    {% for d in depts %}{% set o = opens.get(d.id, (0, 0)) %}{% set people = staff.get(d.id, []) %}
+    <article class="dp-card {{ 'off' if not d.active }} {{ 'nostaff' if d.active and not people }}" id="d-{{ d.id }}">
+      <header class="dp-head">
+        <div>
+          <h2>{{ d.name_ar }}{% if d.key in system %} <span class="chip">أساسي</span>{% endif %}{% if not d.active %} <span class="chip">موقوف</span>{% endif %}</h2>
+          <small dir="ltr" class="hint">{{ d.name_en }}</small>
+        </div>
+        <details class="inline-edit dp-edit"><summary>تعديل</summary>
+          <form method="post" action="/admin/departments" class="rowform">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="id" value="{{ d.id }}">
+            <div class="field"><label>الاسم</label><input type="text" name="name_ar" value="{{ d.name_ar }}" maxlength="60" required></div>
+            <div class="field"><label>بالإنجليزية</label><input type="text" name="name_en" value="{{ d.name_en }}" maxlength="80" dir="ltr"></div>
+            <div class="field"><label>المهلة (أيام عمل)</label><input type="number" name="sla_days" value="{{ d.sla_days }}" min="1" max="30"></div>
+            <div class="field"><label>الترتيب</label><input type="number" name="sort" value="{{ d.sort }}" min="0" max="9999"></div>
+            {% if d.key not in system %}
+            <label class="chk"><input type="checkbox" name="selectable" value="1" {% if d.selectable %}checked{% endif %}> <span>يظهر للموظف كموضوع</span></label>
+            <label class="chk"><input type="checkbox" name="active" value="1" {% if d.active %}checked{% endif %}> <span>مفعّل</span></label>
+            {% endif %}
+            <button class="btn solid" type="submit">حفظ</button>
+          </form>
+        </details>
+      </header>
+      <dl class="dp-facts">
+        <div><dt>المهلة</dt><dd>{{ d.sla_days|days_ar }} عمل</dd></div>
+        <div><dt>تذاكر مفتوحة</dt><dd><a href="/admin?dept={{ d.id }}&status=open">{{ o[0] or 0 }}</a>{% if o[1] %} · <a class="late-txt" href="/admin?dept={{ d.id }}&late=1">{{ o[1] }} متأخرة</a>{% endif %}</dd></div>
+        <div><dt>يختاره الموظف</dt><dd>{{ 'نعم' if d.selectable else 'لا' }}</dd></div>
+        <div><dt>المواعيد</dt><dd>{% if d.appt_enabled %}{{ d.appt_start }}–{{ d.appt_end }}{% else %}موقوفة{% endif %}</dd></div>
+      </dl>
+      <p class="dp-people">{% if people %}<b>الموظفون:</b> {{ people|join('، ') }}{% elif d.active %}<span class="hot-txt"><b>لا يوجد موظف لهذا القسم.</b></span>{% else %}<span class="hint">لا يوجد موظفون.</span>{% endif %}</p>
+      <nav class="dp-links">
+        <a href="/admin/users?dept={{ d.id }}#add">+ إضافة موظف</a>
+        <a href="/admin?dept={{ d.id }}&status=open">تذاكر القسم</a>
+        <a href="/admin/queue?dept={{ d.id }}#setup">إعدادات المواعيد والمكان</a>
+      </nav>
+    </article>
+    {% endfor %}
+  </div>
 </div></section>
 {% endblock %}
+{% block scripts %}<script src="/app-static/admin.js"></script>{% endblock %}

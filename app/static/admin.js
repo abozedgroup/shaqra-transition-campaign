@@ -81,4 +81,24 @@
   [].forEach.call(document.querySelectorAll('input[data-autosubmit-cb]'), function (c) {
     c.addEventListener('change', function () { c.form.submit(); });
   });
+  // "+ add" buttons open the folded add form
+  [].forEach.call(document.querySelectorAll('[data-open]'), function (b) {
+    b.addEventListener('click', function (e) {
+      var d = document.getElementById(b.getAttribute('data-open'));
+      if (!d) return;
+      e.preventDefault(); d.open = true; d.scrollIntoView({ block: 'start' });
+      var f = d.querySelector('input:not([type=hidden])'); if (f) f.focus({ preventScroll: true });
+    });
+  });
+  if (location.hash === '#add') { var ad = document.getElementById('add'); if (ad) ad.open = true; }
+  // copy the suggested password
+  [].forEach.call(document.querySelectorAll('[data-copy]'), function (b) {
+    b.addEventListener('click', function () {
+      var inp = document.getElementById(b.getAttribute('data-copy')); if (!inp) return;
+      inp.select();
+      var done = function () { var t = b.textContent; b.textContent = 'تم النسخ'; setTimeout(function () { b.textContent = t; }, 1500); };
+      if (navigator.clipboard) navigator.clipboard.writeText(inp.value).then(done, function () { document.execCommand('copy'); done(); });
+      else { document.execCommand('copy'); done(); }
+    });
+  });
 })();
