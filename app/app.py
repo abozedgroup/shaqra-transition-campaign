@@ -1799,9 +1799,15 @@ def admin_kiosks():
                 con.execute("UPDATE kiosks SET active=? WHERE id=?", (1 if action == "enable" else 0, as_id(kid)))
                 con.commit()
                 msg = "تم تحديث الجهاز."
-    kiosks = con.execute("SELECT k.*, (SELECT COUNT(*) FROM tickets t WHERE t.kiosk_id=k.id) AS n "
-                         "FROM kiosks k ORDER BY active DESC, id DESC").fetchall()
-    return render_template("admin_kiosks.html", kiosks=kiosks, msg=msg, err=err)
+    today = _utc_of_day(datetime.now(RIYADH).date())
+    kiosks = con.execute("SELECT k.*, (SELECT COUNT(*) FROM tickets t WHERE t.kiosk_id=k.id) AS n, "
+                         "(SELECT COUNT(*) FROM tickets t WHERE t.kiosk_id=k.id AND t.created_at>=?) AS n_today "
+                         "FROM kiosks k ORDER BY active DESC, id DESC", (today,)).fetchall()
+    stale = (datetime.now(timezone.utc) - timedelta(days=3)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    active = [k for k in kiosks if k["active"]]
+    return render_template("admin_kiosks.html", kiosks=kiosks, msg=msg, err=err, active=active,
+                           quiet=[k for k in active if not k["last_seen"] or k["last_seen"] < stale],
+                           add_open=bool(err) or not active)
 
 
 # ---------------------------------------------------------------- indicators

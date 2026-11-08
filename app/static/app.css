@@ -426,3 +426,7 @@ details.more[open] summary{margin-bottom:12px}
 .empty-list li{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 10px;background:var(--soft);border-radius:10px;font-weight:700}
 .dp-head>div{flex:1 1 200px;min-width:0}
 .empty-list .btn,.dp-links a,.ul-add{white-space:nowrap}
+.steps-list{margin:0 0 12px;padding-inline-start:22px;line-height:1.9}
+.pw-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:18px;align-items:start;max-width:960px}
+.dp-head form{margin:0}
+.adm{min-height:calc(100vh - 330px)}

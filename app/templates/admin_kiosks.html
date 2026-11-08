@@ -1,32 +1,61 @@
 {% extends "base.html" %}
 {% block title %}أجهزة الاستقبال{% endblock %}
 {% block body %}
-<section class="s adm"><div class="wrap wide">
+<section class="s adm dp-page"><div class="wrap wide">
   {% set anav='kiosks' %}{% include "_adminnav.html" %}
-  <h1 class="h1s">أجهزة الاستقبال (آيباد أو كمبيوتر عند المدخل)</h1>
-  {% if msg %}<div class="okmsg">{{ msg }}</div>{% endif %}
+  <header class="tl-head">
+    <h1>أجهزة الاستقبال <span class="n-plain">({{ active|length }} مفعّلة)</span></h1>
+    <a class="btn solid" href="#add" data-open="add">+ تفعيل هذا الجهاز</a>
+  </header>
+  {% if msg %}<div class="okmsg" role="status">{{ msg }}</div>{% endif %}
   {% if err %}<div class="warn" role="alert">{{ err }}</div>{% endif %}
-  <div class="panel">
-    <h3>تفعيل هذا الجهاز كجهاز استقبال</h3>
-    <ol class="hint">
-      <li>افتح هذه الصفحة <b>على الجهاز نفسه</b> (الآيباد أو الكمبيوتر عند المدخل) بعد الدخول بحساب مشرف عام.</li>
-      <li>اكتب اسمًا للجهاز واضغط «تفعيل». سيُسجَّل خروجك من اللوحة على هذا الجهاز، ويفتح شاشة الاستقبال مباشرة.</li>
-      <li>على الآيباد: من Safari اختر «مشاركة» ثم «إضافة إلى الشاشة الرئيسية»، وفعّل «الوصول الموجّه» (Guided Access) من إعدادات تسهيلات الاستخدام حتى لا يخرج أحد من الشاشة.</li>
-      <li>يبقى الجهاز مفعّلًا نحو سنة ما لم تمسح بيانات المتصفح. يمكنك إيقافه من هنا في أي وقت.</li>
+
+  {% if not active %}
+  <div class="next-step ns-warn" role="note"><b>لا يوجد جهاز استقبال مفعّل.</b> افتح هذه الصفحة على الآيباد أو الكمبيوتر الذي عند المدخل، ثم اتبع الخطوات أدناه.</div>
+  {% elif quiet %}
+  <div class="next-step ns-warn" role="note"><b>يحتاج انتباهًا:</b> {{ quiet|map(attribute='name')|join('، ') }} لم {{ 'يُستخدم' if quiet|length == 1 else 'تُستخدم' }} منذ أكثر من 3 أيام. تأكد أن الجهاز يعمل وأن شاشة الاستقبال مفتوحة عليه، أو أوقفه إن لم يعد مستخدمًا.</div>
+  {% else %}
+  <div class="next-step" role="note">جهاز الاستقبال يعرض للمراجع: طلب جديد، و«لدي موعد» لتسجيل الوصول، و«قيّم خدمتك». يعود للبداية تلقائيًا بعد فترة دون استخدام.</div>
+  {% endif %}
+
+  <details class="card add-card" id="add" {% if add_open %}open{% endif %}>
+    <summary class="card-h">تفعيل هذا الجهاز كجهاز استقبال</summary>
+    <ol class="steps-list">
+      <li><b>افتح هذه الصفحة على الجهاز نفسه</b> (الآيباد أو الكمبيوتر عند المدخل) بعد الدخول بحساب مشرف عام.</li>
+      <li>اكتب اسمًا للجهاز واضغط <b>«تفعيل»</b>. يُسجَّل خروجك من اللوحة على هذا الجهاز وتفتح شاشة الاستقبال مباشرة.</li>
+      <li>على الآيباد: من Safari اختر «مشاركة» ← «إضافة إلى الشاشة الرئيسية»، وفعّل <b>«الوصول الموجّه» (Guided Access)</b> من إعدادات تسهيلات الاستخدام حتى لا يخرج أحد من الشاشة.</li>
     </ol>
     <form method="post" action="/admin/kiosks" class="inline-form">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="activate">
       <div class="field"><label for="kname">اسم الجهاز</label><input type="text" id="kname" name="name" maxlength="60" placeholder="آيباد مدخل الإدارة" required></div>
-      <button class="btn solid" type="submit">تفعيل هذا الجهاز</button>
+      <button class="btn solid" type="submit">تفعيل</button>
     </form>
+    <p class="hint">يبقى الجهاز مفعّلًا نحو سنة ما لم تُمسح بيانات المتصفح عليه. يمكن إيقافه من هنا في أي وقت.</p>
+  </details>
+
+  {% if kiosks %}
+  <div class="dp-list">
+    {% for k in kiosks %}{% set is_quiet = k in quiet %}
+    <article class="dp-card {{ 'off' if not k.active }} {{ 'nostaff' if is_quiet }}">
+      <header class="dp-head">
+        <div><h2>{{ k.name }}{% if not k.active %} <span class="chip">موقوف</span>{% endif %}</h2>
+          <small class="hint">فُعّل {{ k.created_at|day }} بواسطة <span dir="ltr">{{ k.created_by }}</span></small></div>
+        <form method="post" action="/admin/kiosks" {% if k.active %}data-confirm="إيقاف «{{ k.name }}»؟ ستتوقف شاشة الاستقبال عليه فورًا."{% endif %}>
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="id" value="{{ k.id }}">
+          <button class="btn small {{ 'danger' if k.active }}" type="submit" name="action" value="{{ 'disable' if k.active else 'enable' }}">{{ 'إيقاف' if k.active else 'إعادة تفعيل' }}</button>
+        </form>
+      </header>
+      <dl class="dp-facts">
+        <div><dt>آخر استخدام</dt><dd class="{{ 'hot-txt' if is_quiet }}">{{ k.last_seen|dt if k.last_seen else 'لم يُستخدم' }}</dd></div>
+        <div><dt>طلبات اليوم</dt><dd>{{ k.n_today }}</dd></div>
+        <div><dt>كل الطلبات منه</dt><dd><a href="/admin?channel=walkin&status=all">{{ k.n }}</a></dd></div>
+        <div><dt>الحالة</dt><dd>{{ 'مفعّل' if k.active else 'موقوف' }}</dd></div>
+      </dl>
+    </article>
+    {% endfor %}
   </div>
-  <div class="tablewrap"><table class="tbl">
-    <thead><tr><th>الجهاز</th><th>فُعّل</th><th>بواسطة</th><th>آخر استخدام</th><th>التذاكر</th><th>الحالة</th><th></th></tr></thead>
-    <tbody>{% for k in kiosks %}<tr>
-      <td>{{ k.name }}</td><td>{{ k.created_at|dt }}</td><td dir="ltr">{{ k.created_by }}</td><td>{{ k.last_seen|dt if k.last_seen else '—' }}</td>
-      <td>{{ k.n }}</td><td>{{ 'مفعّل' if k.active else 'موقوف' }}</td>
-      <td><form method="post" action="/admin/kiosks"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="id" value="{{ k.id }}">
-        <button class="btn small {{ 'danger' if k.active }}" type="submit" name="action" value="{{ 'disable' if k.active else 'enable' }}">{{ 'إيقاف' if k.active else 'إعادة تفعيل' }}</button></form></td>
-    </tr>{% else %}<tr><td colspan="7" class="center">لا توجد أجهزة مفعّلة.</td></tr>{% endfor %}</tbody></table></div>
+  <p class="hint mt18">الطلبات المقدّمة من الجهاز دون إفصاح لا تُنسب إلى جهاز بعينه حفاظًا على هوية مقدّمها، فلا تدخل في عدد الجهاز.</p>
+  {% endif %}
 </div></section>
 {% endblock %}
+{% block scripts %}<script src="/app-static/admin.js"></script>{% endblock %}
