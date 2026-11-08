@@ -9,8 +9,9 @@
     <div class="field"><label for="ref">{{ t.lbl_ref }}<span class="req" aria-hidden="true">*</span></label>
       <input type="text" id="ref" name="ref" dir="ltr" class="ltr-field" maxlength="20" placeholder="SHQ-261031-ABC23" autocomplete="off" autocapitalize="characters" spellcheck="false" required aria-describedby="ref-h">
       <span class="hint" id="ref-h">{{ t.st_where }}</span></div>
-    <div class="field"><label for="email">{{ t.lbl_email_st }}<span class="req" aria-hidden="true">*</span></label>
-      <input type="email" id="email" name="email" dir="ltr" class="ltr-field" maxlength="120" placeholder="name@moh.gov.sa" autocomplete="email" inputmode="email" required></div>
+    <div class="field"><label for="email">{{ t.lbl_email_or_code }}<span class="req" aria-hidden="true">*</span></label>
+      <input type="text" id="email" name="email" dir="ltr" class="ltr-field" maxlength="120" placeholder="name@moh.gov.sa" autocomplete="email" spellcheck="false" autocapitalize="off" required aria-describedby="code-h">
+      <span class="hint" id="code-h">{{ t.st_where_code }}</span></div>
     <button class="btn solid block" type="submit">{{ t.st_show }}</button>
   </form>
   {% if error %}<div class="warn errsum mt18" role="alert">{{ error }}</div>{% endif %}
@@ -19,6 +20,7 @@
     <h2>{{ t.st_ticket }} <span class="ref ref-sm">{{ result.ref }}</span></h2>
     <p><b>{{ t.st_status }}</b> <span class="badge st-{{ result.status }}">{{ statuses.get(result.status, result.status) }}</span></p>
     <p><b>{{ t.st_type }}</b> {{ types.get(result.req_type, result.req_type) }}<br>
+    {% if dept_name %}<b>{{ t.st_dept }}</b> {{ dept_name }}<br>{% endif %}
     <b>{{ t.st_created }}</b> {{ result.created_at|dt }} {{ t.st_tz }}<br>
     <b>{{ t.st_updated }}</b> {{ result.updated_at|dt }}</p>
     {% if result.reply %}<p><b>{{ t.st_reply }}</b></p><pre>{{ result.reply }}</pre>{% else %}<p class="hint">{{ t.st_noreply }}</p>{% endif %}

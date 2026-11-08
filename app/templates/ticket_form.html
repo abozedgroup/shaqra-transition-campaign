@@ -15,7 +15,7 @@
   <div class="warn errsum" role="alert" id="errsum" tabindex="-1"><b>{{ t.errsum }}</b>
     <ul>{% for n in err_order if n in errors %}<li><a href="#{{ 'type-first' if n=='req_type' else n }}">{{ errors[n] }}</a></li>{% endfor %}</ul></div>
   {% endif %}
-  <form class="formcard" id="f" method="post" action="{{ u.ticket }}" novalidate data-start="{{ start }}">
+  <form class="formcard{% if v.anonymous %} anon{% endif %}" id="f" method="post" action="{{ u.ticket }}" novalidate data-start="{{ start }}" data-anon-types="{{ anon_types|join(',') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="hp" aria-hidden="true"><label>Leave empty<input type="text" name="website" tabindex="-1" autocomplete="off"></label></div>
 
@@ -28,6 +28,13 @@
         </div>
         {{ fld_err('req_type') }}
       </div>
+      <div class="field {% if errors.topic %}bad{% endif %}" id="g-topic"><label for="topic">{{ t.lbl_topic }}<span class="req" aria-hidden="true"> *</span></label>
+        <select id="topic" name="topic" required aria-describedby="h-topic e-topic"><option value="">{{ t.choose }}</option>{% for k, lbl in topics %}<option value="{{ k }}" {% if v.topic==k %}selected{% endif %}>{{ lbl }}</option>{% endfor %}</select>
+        <span class="hint" id="h-topic">{{ t.hint_topic }}</span>{{ fld_err('topic') }}</div>
+      <div class="field anonbox" id="anonbox">
+        <label class="chk"><input type="checkbox" name="anonymous" value="1" id="anonymous" {% if v.anonymous %}checked{% endif %} aria-describedby="h-anon"> <span><b>{{ t.anon_lbl }}</b></span></label>
+        <span class="hint" id="h-anon">{{ t.anon_hint }}</span>
+      </div>
       <div class="field {% if errors.message %}bad{% endif %}" id="g-message"><label for="message">{{ t.lbl_message }}<span class="req" aria-hidden="true"> *</span></label>
         <textarea id="message" name="message" maxlength="3000" required aria-describedby="m-h e-message">{{ v.message or '' }}</textarea>
         <div class="fgroup spread"><span class="hint" id="m-h">{{ t.hint_message }}</span><span class="counter" dir="ltr"><span id="cnt">0</span> / 3000</span></div>
@@ -37,15 +44,16 @@
 
     <fieldset class="fstep" data-step="2">
       <legend class="legend">{{ t.s2 }}</legend>
-      <div class="field {% if errors.name %}bad{% endif %}" id="g-name"><label for="name">{{ t.lbl_name }}<span class="req" aria-hidden="true"> *</span></label>
+      <div class="note anon-only">{{ t.anon_on }}</div>
+      <div class="field pi {% if errors.name %}bad{% endif %}" id="g-name"><label for="name">{{ t.lbl_name }}<span class="req" aria-hidden="true"> *</span></label>
         <input type="text" id="name" name="name" autocomplete="name" maxlength="80" enterkeyhint="next" value="{{ v.name or '' }}" required aria-describedby="e-name">{{ fld_err('name') }}</div>
-      <div class="field {% if errors.emp_no %}bad{% endif %}" id="g-emp_no"><label for="emp_no">{{ t.lbl_emp }}<span class="req" aria-hidden="true"> *</span></label>
+      <div class="field pi {% if errors.emp_no %}bad{% endif %}" id="g-emp_no"><label for="emp_no">{{ t.lbl_emp }}<span class="req" aria-hidden="true"> *</span></label>
         <input type="text" id="emp_no" name="emp_no" inputmode="numeric" dir="ltr" class="ltr-field" maxlength="10" enterkeyhint="next" value="{{ v.emp_no or '' }}" required aria-describedby="h-emp e-emp_no">
         <span class="hint" id="h-emp">{{ t.hint_emp }}</span>{{ fld_err('emp_no') }}</div>
       <div class="frow">
-        <div class="field {% if errors.facility %}bad{% endif %}" id="g-facility"><label for="facility">{{ t.lbl_facility }}<span class="req" aria-hidden="true"> *</span></label>
+        <div class="field {% if errors.facility %}bad{% endif %}" id="g-facility"><label for="facility"><span class="pi-inline">{{ t.lbl_facility }}<span class="req" aria-hidden="true"> *</span></span><span class="anon-inline">{{ t.lbl_facility_opt }}</span></label>
           <select id="facility" name="facility" required aria-describedby="e-facility"><option value="">{{ t.choose }}</option>{% for k, lbl in facilities %}<option value="{{ k }}" {% if v.facility_key==k %}selected{% endif %}>{{ lbl }}</option>{% endfor %}</select>{{ fld_err('facility') }}</div>
-        <div class="field {% if errors.job_cat %}bad{% endif %}" id="g-job_cat"><label for="job_cat">{{ t.lbl_job }}<span class="req" aria-hidden="true"> *</span></label>
+        <div class="field pi {% if errors.job_cat %}bad{% endif %}" id="g-job_cat"><label for="job_cat">{{ t.lbl_job }}<span class="req" aria-hidden="true"> *</span></label>
           <select id="job_cat" name="job_cat" required aria-describedby="e-job_cat"><option value="">{{ t.choose }}</option>{% for k, lbl in jobs %}<option value="{{ k }}" {% if v.job_key==k %}selected{% endif %}>{{ lbl }}</option>{% endfor %}</select>{{ fld_err('job_cat') }}</div>
       </div>
       <div class="stepnav"><button type="button" class="btn go" data-go="1">{{ t.back }}</button><button type="button" class="btn solid go" data-go="3">{{ t.next }}</button></div>
@@ -53,10 +61,11 @@
 
     <fieldset class="fstep" data-step="3">
       <legend class="legend">{{ t.s3 }}</legend>
-      <div class="field {% if errors.email %}bad{% endif %}" id="g-email"><label for="email">{{ t.lbl_email }}<span class="req" aria-hidden="true"> *</span></label>
+      <div class="note anon-only">{{ t.anon_s3 }}</div>
+      <div class="field pi {% if errors.email %}bad{% endif %}" id="g-email"><label for="email">{{ t.lbl_email }}<span class="req" aria-hidden="true"> *</span></label>
         <input type="email" id="email" name="email" inputmode="email" autocomplete="email" dir="ltr" class="ltr-field" maxlength="120" enterkeyhint="next" placeholder="name@moh.gov.sa" value="{{ v.email or '' }}" required aria-describedby="h-email e-email">
         <span class="hint" id="h-email">{{ t.hint_email }}</span>{{ fld_err('email') }}</div>
-      <div class="field {% if errors.mobile %}bad{% endif %}" id="g-mobile"><label for="mobile">{{ t.lbl_mobile }}<span class="req" aria-hidden="true"> *</span></label>
+      <div class="field pi {% if errors.mobile %}bad{% endif %}" id="g-mobile"><label for="mobile">{{ t.lbl_mobile }}<span class="req" aria-hidden="true"> *</span></label>
         <input type="tel" id="mobile" name="mobile" inputmode="numeric" autocomplete="tel" dir="ltr" class="ltr-field" maxlength="10" enterkeyhint="done" placeholder="05XXXXXXXX" value="{{ v.mobile or '' }}" required aria-describedby="h-mobile e-mobile">
         <span class="hint" id="h-mobile">{{ t.hint_mobile }}</span>{{ fld_err('mobile') }}</div>
       <div class="privacy">{{ t.privacy|safe }}</div>

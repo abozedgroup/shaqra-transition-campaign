@@ -3,7 +3,7 @@
 {% block body %}
 <section class="s adm2"><div class="wrap">
   <form class="formcard narrowform" method="post" action="/admin/login" autocomplete="off">
-    <h1 class="h1s">دخول فريق العناية بالموظفين</h1>
+    <h1 class="h1s">دخول فريق العناية بالموظفين والأقسام</h1>
     {% if not configured %}<div class="warn">لوحة التحكم غير مفعّلة بعد (لم تُضبط بيانات الدخول).</div>{% endif %}
     {% if error %}<div class="warn" role="alert">{{ error }}</div>{% endif %}
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

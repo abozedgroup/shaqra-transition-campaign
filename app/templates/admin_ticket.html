@@ -1,38 +1,94 @@
 {% extends "base.html" %}
 {% block title %}تذكرة {{ tk.ref }}{% endblock %}
 {% block body %}
-<section class="s adm"><div class="wrap">
-  <p><a href="/admin">← العودة للوحة</a></p>
-  <div class="formcard">
-    <h1 class="h1s">تذكرة <span class="ref ref-sm" >{{ tk.ref }}</span> <span class="badge st-{{ tk.status }}">{{ statuses.get(tk.status, tk.status) }}</span></h1>
-    {% if saved %}<div class="result show"><b>تم الحفظ.</b></div>{% endif %}
-    <dl class="kv">
-      <dt>نوع الطلب</dt><dd>{{ types.get(tk.req_type, tk.req_type) }}</dd>
-      <dt>الاسم</dt><dd>{{ tk.name }}</dd>
-      <dt>الرقم الوظيفي</dt><dd dir="ltr">{{ tk.emp_no }}</dd>
-      <dt>البريد</dt><dd dir="ltr"><a href="mailto:{{ tk.email }}">{{ tk.email }}</a></dd>
-      <dt>الجوال</dt><dd dir="ltr">{{ tk.mobile }}</dd>
-      <dt>المنشأة</dt><dd>{{ tk.facility }}</dd>
-      <dt>الفئة الوظيفية</dt><dd>{{ tk.job_cat }}</dd>
-      <dt>لغة التقديم</dt><dd>{{ "English" if tk.lang=='en' else "العربية" }}</dd>
-      <dt>تاريخ التقديم</dt><dd>{{ tk.created_at|dt }} (توقيت الرياض)</dd>
-      <dt>آخر تحديث</dt><dd>{{ tk.updated_at|dt }}</dd>
-    </dl>
-    <h3>نص الطلب</h3><pre class="msgbox">{{ tk.message }}</pre>
-    <form method="post" action="/admin/t/{{ tk.ref }}">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <div class="field"><label for="status">الحالة</label>
-        <select id="status" name="status">{% for k,l in statuses.items() %}<option value="{{k}}" {% if tk.status==k %}selected{% endif %}>{{l}}</option>{% endfor %}</select></div>
-      <div class="field"><label for="reply">الرد على الموظف <span class="opt">(يظهر له في صفحة المتابعة)</span></label>
-        <textarea id="reply" name="reply" maxlength="3000">{{ tk.reply }}</textarea></div>
-      <div class="field"><label for="note">ملاحظة داخلية <span class="opt">(لا تظهر للموظف)</span></label>
-        <textarea id="note" name="note" maxlength="3000" class="short">{{ tk.note }}</textarea></div>
-      <button class="btn solid" type="submit">حفظ</button>
-    </form>
-    <form method="post" action="/admin/t/{{ tk.ref }}/delete" class="delform" data-confirm="حذف التذكرة نهائيًا؟ لا يمكن التراجع.">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button class="btn danger" type="submit">حذف التذكرة نهائيًا</button>
-    </form>
+<section class="s adm"><div class="wrap wide">
+  {% include "_adminnav.html" %}
+  <p><a href="/admin">← العودة للقائمة</a></p>
+  {% set is_late = tk.status != 'closed' and tk.due_at and tk.due_at < now %}
+  <h1 class="h1s">تذكرة <span class="ref ref-sm">{{ tk.ref }}</span> <span class="badge st-{{ tk.status }}">{{ statuses.get(tk.status, tk.status) }}</span></h1>
+  {% if saved %}<div class="okmsg"><b>تم الحفظ.</b></div>{% endif %}
+  {% if err %}<div class="warn" role="alert">{{ err }}</div>{% endif %}
+  <div class="grid2">
+    <div>
+      <div class="panel">
+        <dl class="kv">
+          <dt>القسم الحالي</dt><dd><b>{{ dept_names.get(tk.dept_id, '—') }}</b></dd>
+          <dt>المهلة</dt><dd>{% if tk.status=='closed' %}مغلقة {{ tk.closed_at|dt if tk.closed_at else '' }}{% elif is_late %}<span class="late-txt">متأخرة – كانت حتى {{ tk.due_at|dt }}</span>{% else %}حتى {{ tk.due_at|dt if tk.due_at else '—' }}{% endif %}</dd>
+          <dt>نوع الطلب</dt><dd>{{ types.get(tk.req_type, tk.req_type) }}</dd>
+          <dt>الموضوع</dt><dd>{{ topic_names.get(tk.topic, '—') }}</dd>
+          {% if tk.anonymous %}
+          <dt>مقدّم الطلب</dt><dd><span class="anon-tag">مجهول</span> اختار عدم الإفصاح عن بياناته، ولا يمكن التواصل معه. يرى الرد برقم التذكرة ورمز المتابعة.</dd>
+          <dt>المنشأة</dt><dd>{{ tk.facility or 'لم تُذكر' }}</dd>
+          {% else %}
+          <dt>الاسم</dt><dd>{{ tk.name }}</dd>
+          <dt>الرقم الوظيفي</dt><dd dir="ltr">{{ tk.emp_no }}</dd>
+          <dt>البريد</dt><dd dir="ltr"><a href="mailto:{{ tk.email }}">{{ tk.email }}</a></dd>
+          <dt>الجوال</dt><dd dir="ltr">{{ tk.mobile }}</dd>
+          <dt>المنشأة</dt><dd>{{ tk.facility }}</dd>
+          <dt>الفئة الوظيفية</dt><dd>{{ tk.job_cat }}</dd>
+          {% endif %}
+          <dt>لغة التقديم</dt><dd>{{ "English" if tk.lang=='en' else "العربية" }}</dd>
+          <dt>تاريخ التقديم</dt><dd>{{ tk.created_at|dt }} (توقيت الرياض)</dd>
+          <dt>آخر تحديث</dt><dd>{{ tk.updated_at|dt }}</dd>
+        </dl>
+        <h3>نص الطلب</h3><pre class="msgbox">{{ tk.message }}</pre>
+      </div>
+
+      <form class="panel" method="post" action="/admin/t/{{ tk.ref }}">
+        <h3>الحالة والرد</h3>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="update">
+        <div class="field"><label for="status">الحالة</label>
+          <select id="status" name="status">{% for k,l in statuses.items() %}<option value="{{k}}" {% if tk.status==k %}selected{% endif %}>{{l}}</option>{% endfor %}</select></div>
+        <div class="field"><label for="reply">الرد على الموظف <span class="opt">(يظهر له في صفحة المتابعة)</span></label>
+          <textarea id="reply" name="reply" maxlength="3000">{{ tk.reply }}</textarea></div>
+        <button class="btn solid" type="submit">حفظ</button>
+      </form>
+    </div>
+
+    <div>
+      <form class="panel" method="post" action="/admin/t/{{ tk.ref }}">
+        <h3>تصعيد / إحالة إلى قسم</h3>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="escalate">
+        <div class="field"><label for="to_dept">القسم المستلم</label>
+          <select id="to_dept" name="to_dept" required><option value="">اختر…</option>{% for d in depts %}<option value="{{ d.id }}" {% if d.key==tk.topic %}selected{% endif %}>{{ d.name_ar }} (مهلة {{ d.sla_days }} أيام عمل)</option>{% endfor %}</select></div>
+        <div class="field"><label for="reason">سبب التصعيد والمطلوب من القسم</label>
+          <textarea id="reason" name="reason" maxlength="2000" class="short" required></textarea></div>
+        <p class="hint">بعد الإحالة تنتقل التذكرة إلى القسم المستلم بمهلة جديدة، ويرى الموظف أنها «محالة إلى القسم المختص».{% if not me_admin %} لن تظهر في قائمة قسمك بعد ذلك.{% endif %}</p>
+        <button class="btn solid" type="submit">إحالة</button>
+      </form>
+
+      <form class="panel inline-form" method="post" action="/admin/t/{{ tk.ref }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="topic">
+        <div class="field"><label for="topic">تصحيح تصنيف الموضوع</label>
+          <select id="topic" name="topic">{% for k,l in topic_names.items() %}<option value="{{k}}" {% if tk.topic==k %}selected{% endif %}>{{l}}</option>{% endfor %}</select></div>
+        <button class="btn" type="submit">حفظ التصنيف</button>
+      </form>
+
+      <div class="panel" id="timeline">
+        <h3>سجل التذكرة</h3>
+        <ol class="timeline">
+          {% for e in events %}
+          <li class="k-{{ e.kind }}"><div class="meta">{{ e.at|dt }} · {{ e.actor }} · <b>{{ kinds.get(e.kind, e.kind) }}</b>
+            {% if e.kind=='escalate' %}: من {{ dept_names.get(e.from_dept, '—') }} إلى {{ dept_names.get(e.to_dept, '—') }}{% elif e.kind=='create' %}: إلى {{ dept_names.get(e.to_dept, '—') }}{% endif %}</div>
+            {% if e.text %}<div class="txt">{{ e.text }}</div>{% endif %}</li>
+          {% endfor %}
+          {% if tk.note %}<li class="k-note"><div class="meta"><b>ملاحظة داخلية سابقة</b></div><div class="txt">{{ tk.note }}</div></li>{% endif %}
+        </ol>
+        <form method="post" action="/admin/t/{{ tk.ref }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="note">
+          <div class="field"><label for="note">إضافة ملاحظة داخلية <span class="opt">(لا تظهر للموظف، وتراها الأقسام التي تصلها التذكرة)</span></label>
+            <textarea id="note" name="note" maxlength="3000" class="short"></textarea></div>
+          <button class="btn" type="submit">إضافة الملاحظة</button>
+        </form>
+      </div>
+
+      {% if can_delete %}
+      <form method="post" action="/admin/t/{{ tk.ref }}/delete" class="delform" data-confirm="حذف التذكرة وسجلها نهائيًا؟ لا يمكن التراجع.">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn danger" type="submit">حذف التذكرة نهائيًا</button>
+      </form>
+      {% endif %}
+    </div>
   </div>
 </div></section>
 {% endblock %}

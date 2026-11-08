@@ -7,8 +7,25 @@
     return s.replace(/[٠-٩۰-۹]/g, function (c) { return String(AR.indexOf(c) % 10); }).replace(/\s+/g, '');
   }
   // same rules as the server (app.py validate_ticket); messages are rendered by the server in the page language
+  var anonTypes = (f.getAttribute('data-anon-types') || '').split(',');
+  var anonBox = document.getElementById('anonbox'), anonChk = f.elements.anonymous;
+  function curType() { var r = f.querySelector('input[name=req_type]:checked'); return r ? r.value : ''; }
+  function isAnon() { return !!(anonChk && anonChk.checked && anonTypes.indexOf(curType()) >= 0); }
+  // personal fields are not needed (and not sent) when the employee chooses not to share them
+  var personal = { name: 1, emp_no: 1, job_cat: 1, email: 1, mobile: 1, facility: 1 };
+  function syncAnon() {
+    var allowed = anonTypes.indexOf(curType()) >= 0;
+    if (anonBox) anonBox.classList.toggle('off', !allowed);
+    f.classList.toggle('anon', isAnon());
+    if (isAnon()) Object.keys(personal).forEach(function (n) {
+      var g = document.getElementById('g-' + n); if (g) g.classList.remove('bad');
+    });
+  }
+  [].forEach.call(f.querySelectorAll('input[name=req_type]'), function (r) { r.addEventListener('change', syncAnon); });
+  if (anonChk) anonChk.addEventListener('change', syncAnon);
   var rules = {
     req_type: function () { return !!f.querySelector('input[name=req_type]:checked'); },
+    topic: function (v) { return v !== ''; },
     message: function (v) { return v.trim().length >= 10; },
     name: function (v) { return v.trim().length >= 3; },
     emp_no: function (v) { return /^\d{3,10}$/.test(digits(v)); },
@@ -18,11 +35,11 @@
     mobile: function (v) { return /^05\d{8}$/.test(digits(v)); },
     consent: function () { return f.elements.consent.checked; }
   };
-  var stepOf = { req_type: 1, message: 1, name: 2, emp_no: 2, facility: 2, job_cat: 2, email: 3, mobile: 3, consent: 3 };
+  var stepOf = { req_type: 1, topic: 1, message: 1, name: 2, emp_no: 2, facility: 2, job_cat: 2, email: 3, mobile: 3, consent: 3 };
   var focusId = { req_type: 'type-first' };
   function val(n) { var e = f.elements[n]; return e && e.value !== undefined ? e.value : ''; }
   function check(n, show) {
-    var ok = rules[n](val(n));
+    var ok = (isAnon() && personal[n]) ? true : rules[n](val(n));
     var g = document.getElementById('g-' + n);
     if (g && show) {
       g.classList.toggle('bad', !ok);
@@ -59,7 +76,8 @@
     if (focus) {
       var lg = steps[n - 1].querySelector('legend');
       if (live && bar && bar.children[n - 1]) live.textContent = bar.children[n - 1].textContent;
-      var first = steps[n - 1].querySelector('input:not([type=hidden]),select,textarea');
+      var first = [].filter.call(steps[n - 1].querySelectorAll('input:not([type=hidden]),select,textarea'),
+        function (e) { return e.offsetParent !== null; })[0];
       window.scrollTo({ top: Math.max(0, f.getBoundingClientRect().top + window.pageYOffset - 150) });
       if (first) try { first.focus({ preventScroll: true }); } catch (e) { first.focus(); }
     }
@@ -87,6 +105,7 @@
       show(to, true);
     });
   });
+  syncAnon();
   show(+f.dataset.start || 1, false);
   f.addEventListener('submit', function (ev) {
     // Enter key inside a step before the last one = "Next"
@@ -101,6 +120,12 @@
       if (live) { var er = document.getElementById('e-' + first); live.textContent = er ? er.textContent : ''; }
       return;
     }
+    if (isAnon()) {
+      ['name', 'emp_no', 'email', 'mobile'].forEach(function (n) { f.elements[n].value = ''; });
+      f.elements.job_cat.value = '';
+      return;
+    }
+    if (anonChk) anonChk.checked = false;
     f.elements.email.value = f.elements.email.value.trim().toLowerCase();
     f.elements.mobile.value = digits(f.elements.mobile.value);
     f.elements.emp_no.value = digits(f.elements.emp_no.value);

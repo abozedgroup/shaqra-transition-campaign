@@ -1,0 +1,10 @@
+<nav class="adminnav" aria-label="قائمة اللوحة">
+  <a href="/admin" {% if anav=='list' %}class="cur"{% endif %}>التذاكر</a>
+  {% if me_admin %}
+  <a href="/admin/departments" {% if anav=='depts' %}class="cur"{% endif %}>الأقسام</a>
+  <a href="/admin/users" {% if anav=='users' %}class="cur"{% endif %}>الحسابات</a>
+  {% endif %}
+  <a href="/admin/password" {% if anav=='pw' %}class="cur"{% endif %}>كلمة المرور</a>
+  <span class="who">{{ me.display_name }} · {{ roles.get(me.role, me.role) }}</span>
+  <form method="post" action="/admin/logout"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn" type="submit">خروج</button></form>
+</nav>

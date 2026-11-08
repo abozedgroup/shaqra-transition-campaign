@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}الحسابات{% endblock %}
+{% block body %}
+<section class="s adm"><div class="wrap wide">
+  {% set anav='users' %}{% include "_adminnav.html" %}
+  <h1 class="h1s">حسابات الموظفين</h1>
+  <p class="hint">موظف القسم يرى تذاكر قسمه فقط ويرد عليها ويحيلها. المشرف العام يرى كل التذاكر ويدير الأقسام والحسابات ويحذف التذاكر.</p>
+  {% if msg %}<div class="okmsg">{{ msg }}</div>{% endif %}
+  {% if err %}<div class="warn" role="alert">{{ err }}</div>{% endif %}
+
+  <form class="panel" method="post" action="/admin/users">
+    <h3>إضافة حساب</h3>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="rowform">
+      <div class="field"><label for="dn">اسم الموظف</label><input type="text" id="dn" name="display_name" maxlength="60" required></div>
+      <div class="field"><label for="un">اسم المستخدم</label><input type="text" id="un" name="username" maxlength="32" dir="ltr" class="ltr-field" autocomplete="off" placeholder="ahmad.leaves" required></div>
+      <div class="field"><label for="ro">الصلاحية</label><select id="ro" name="role">{% for k,l in roles.items() %}<option value="{{k}}" {% if k=='staff' %}selected{% endif %}>{{l}}</option>{% endfor %}</select></div>
+      <div class="field"><label for="dp">القسم</label><select id="dp" name="dept_id"><option value="">—</option>{% for d in depts if d.active %}<option value="{{ d.id }}">{{ d.name_ar }}</option>{% endfor %}</select></div>
+      <div class="field"><label for="pw">كلمة المرور <span class="opt">(10 خانات على الأقل)</span></label><input type="text" id="pw" name="password" dir="ltr" class="ltr-field" value="{{ suggested }}" autocomplete="off" minlength="10" required></div>
+      <button class="btn solid" type="submit">إنشاء</button>
+    </div>
+    <p class="hint">كلمة مرور مقترحة معبأة مسبقًا. انسخها وأعطها للموظف قبل الإنشاء؛ لا يمكن عرضها بعد ذلك.</p>
+  </form>
+
+  <div class="tablewrap"><table class="tbl">
+    <thead><tr><th>الاسم</th><th>اسم المستخدم</th><th>الصلاحية</th><th>القسم</th><th>الحالة</th><th>آخر دخول</th><th>تعديل</th></tr></thead>
+    <tbody>
+      <tr><td>المشرف العام (الرئيسي)</td><td dir="ltr">من إعدادات الخادم</td><td>مشرف عام</td><td>—</td><td>مفعّل</td><td>—</td><td class="hint">يُدار من Dokploy</td></tr>
+      {% for x in users %}<tr>
+      <td>{{ x.display_name }}</td><td dir="ltr">{{ x.username }}</td><td>{{ roles.get(x.role, x.role) }}</td>
+      <td>{{ dept_names.get(x.dept_id, '—') }}</td><td>{{ 'مفعّل' if x.active else 'موقوف' }}</td>
+      <td>{{ x.last_login|dt if x.last_login else '—' }}</td>
+      <td class="wrap"><details class="edit"><summary>تعديل</summary>
+        <form method="post" action="/admin/users" class="rowform">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="id" value="{{ x.id }}">
+          <div class="field"><label>الاسم</label><input type="text" name="display_name" value="{{ x.display_name }}" maxlength="60" required></div>
+          <div class="field"><label>الصلاحية</label><select name="role">{% for k,l in roles.items() %}<option value="{{k}}" {% if x.role==k %}selected{% endif %}>{{l}}</option>{% endfor %}</select></div>
+          <div class="field"><label>القسم</label><select name="dept_id"><option value="">—</option>{% for d in depts %}<option value="{{ d.id }}" {% if x.dept_id==d.id %}selected{% endif %}>{{ d.name_ar }}</option>{% endfor %}</select></div>
+          <div class="field"><label>كلمة مرور جديدة <span class="opt">(اتركها فارغة للإبقاء)</span></label><input type="text" name="password" dir="ltr" class="ltr-field" autocomplete="off"></div>
+          <label class="chk"><input type="checkbox" name="active" value="1" {% if x.active %}checked{% endif %}> <span>مفعّل</span></label>
+          <button class="btn solid" type="submit">حفظ</button>
+        </form></details></td>
+    </tr>{% endfor %}</tbody></table></div>
+</div></section>
+{% endblock %}

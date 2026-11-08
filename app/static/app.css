@@ -28,3 +28,36 @@
 .ok-h{color:#05603f}.mt18{margin-top:18px}.spread{justify-content:space-between}.ref-sm{font-size:20px}
 .adm{padding-top:30px}.adm2{padding-top:50px}.narrowform{max-width:480px;margin-inline:auto}.center{text-align:center}textarea.short{min-height:90px}
 .stepnav .btn.solid{flex:2 1 190px}
+
+/* topic + anonymous */
+.anonbox{background:var(--soft);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.js .anonbox.off{display:none}
+.anon-only,.anon-inline{display:none}
+.anon .anon-only{display:block}.anon .anon-inline{display:inline}.anon .pi,.anon .pi-inline{display:none}
+/* staff dashboard */
+.st-escalated{background:#e7eefb;color:#23468f}
+.adminnav{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 16px;padding:10px 12px;background:var(--soft);border:1px solid var(--line);border-radius:12px}
+.adminnav a{padding:4px 12px;border-radius:99px;text-decoration:none;color:var(--navy);font-weight:700}
+.adminnav a.cur{background:var(--navy);color:#fff}
+.adminnav .who{margin-inline-start:auto;color:var(--muted);font-size:14px}
+.adminnav form{margin:0}
+.kpi.late{background:#fde8e6;color:#a8322a}
+.late-txt{color:#b03a2e;font-weight:700}
+.tbl tr.is-late td{background:#fff6f5}
+.anon-tag{display:inline-block;background:#eee;color:#444;border-radius:99px;padding:0 10px;font-size:13px}
+.panel{border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin:0 0 16px}
+.panel h3{margin:0 0 10px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+.timeline{list-style:none;margin:0;padding:0}
+.timeline li{border-inline-start:3px solid var(--line);padding:4px 12px 12px;margin:0}
+.timeline li.k-escalate{border-color:#3b63b8}.timeline li.k-reply{border-color:#05724f}.timeline li.k-note{border-color:#e0a800}
+.timeline .meta{color:var(--muted);font-size:13.5px}
+.timeline .txt{white-space:pre-wrap;word-break:break-word;margin-top:2px}
+.summary td a{font-weight:700}
+.inline-form{display:flex;gap:8px;flex-wrap:wrap;align-items:end}
+.inline-form .field{margin:0;flex:1 1 160px}
+.okmsg{background:#f0faf6;border:1px solid #a7dcc9;border-radius:12px;padding:10px 14px;margin:0 0 14px}
+.tbl td.wrap{white-space:normal;min-width:180px}
+.rowform{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;align-items:end}
+.rowform .field{margin:0}
+details.edit{margin-top:6px}details.edit summary{cursor:pointer;color:var(--navy);font-weight:700}

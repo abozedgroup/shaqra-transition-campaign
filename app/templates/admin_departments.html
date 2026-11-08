@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}الأقسام{% endblock %}
+{% block body %}
+<section class="s adm"><div class="wrap wide">
+  {% set anav='depts' %}{% include "_adminnav.html" %}
+  <h1 class="h1s">الأقسام</h1>
+  <p class="hint">«يختاره الموظف» يعني أن القسم يظهر للموظف في قائمة «موضوع الطلب». قسما العناية بالموظفين والشكاوى أساسيان: الأول يستقبل كل الطلبات، والثاني يستقبل الشكاوى والملاحظات والاقتراحات، ولا يمكن إيقافهما.</p>
+  {% if msg %}<div class="okmsg">{{ msg }}</div>{% endif %}
+  {% if err %}<div class="warn" role="alert">{{ err }}</div>{% endif %}
+  <div class="tablewrap"><table class="tbl">
+    <thead><tr><th>القسم</th><th>بالإنجليزية</th><th>المهلة</th><th>يختاره الموظف</th><th>الحالة</th><th>الحسابات</th><th>تعديل</th></tr></thead>
+    <tbody>{% for d in depts %}<tr>
+      <td><b>{{ d.name_ar }}</b>{% if d.key in system %} <span class="anon-tag">أساسي</span>{% endif %}</td><td dir="ltr">{{ d.name_en }}</td>
+      <td>{{ d.sla_days }} أيام عمل</td><td>{{ 'نعم' if d.selectable else 'لا' }}</td><td>{{ 'مفعّل' if d.active else 'موقوف' }}</td>
+      <td>{{ counts.get(d.id, 0) }}</td>
+      <td class="wrap"><details class="edit"><summary>تعديل</summary>
+        <form method="post" action="/admin/departments" class="rowform">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="id" value="{{ d.id }}">
+          <div class="field"><label>الاسم</label><input type="text" name="name_ar" value="{{ d.name_ar }}" maxlength="60" required></div>
+          <div class="field"><label>بالإنجليزية</label><input type="text" name="name_en" value="{{ d.name_en }}" maxlength="80" dir="ltr"></div>
+          <div class="field"><label>المهلة (أيام عمل)</label><input type="number" name="sla_days" value="{{ d.sla_days }}" min="1" max="30"></div>
+          <div class="field"><label>الترتيب</label><input type="number" name="sort" value="{{ d.sort }}" min="0" max="9999"></div>
+          {% if d.key not in system %}
+          <label class="chk"><input type="checkbox" name="selectable" value="1" {% if d.selectable %}checked{% endif %}> <span>يختاره الموظف</span></label>
+          <label class="chk"><input type="checkbox" name="active" value="1" {% if d.active %}checked{% endif %}> <span>مفعّل</span></label>
+          {% endif %}
+          <button class="btn solid" type="submit">حفظ</button>
+        </form></details></td>
+    </tr>{% endfor %}</tbody></table></div>
+
+  <form class="panel mt18" method="post" action="/admin/departments">
+    <h3>إضافة قسم</h3>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="rowform">
+      <div class="field"><label for="na">اسم القسم</label><input type="text" id="na" name="name_ar" maxlength="60" required></div>
+      <div class="field"><label for="ne">بالإنجليزية <span class="opt">(لصفحة الموظف الإنجليزية)</span></label><input type="text" id="ne" name="name_en" maxlength="80" dir="ltr"></div>
+      <div class="field"><label for="sd">المهلة (أيام عمل)</label><input type="number" id="sd" name="sla_days" value="3" min="1" max="30"></div>
+      <div class="field"><label for="so">الترتيب</label><input type="number" id="so" name="sort" value="100" min="0" max="9999"></div>
+      <label class="chk"><input type="checkbox" name="selectable" value="1" checked> <span>يختاره الموظف كموضوع</span></label>
+      <button class="btn solid" type="submit">إضافة</button>
+    </div>
+  </form>
+</div></section>
+{% endblock %}

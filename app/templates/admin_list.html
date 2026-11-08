@@ -2,31 +2,51 @@
 {% block title %}لوحة التذاكر{% endblock %}
 {% block body %}
 <section class="s adm"><div class="wrap wide">
-  <div class="adminbar">
-    <h1 class="h1s">لوحة تذاكر العناية بالموظفين</h1>
-    <form method="post" action="/admin/logout"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn" type="submit">خروج</button></form>
-  </div>
+  {% set anav='list' %}{% include "_adminnav.html" %}
+  <h1 class="h1s">{% if me_admin %}لوحة التذاكر – كل الأقسام{% else %}تذاكر قسم {{ my_dept.name_ar if my_dept else '—' }}{% endif %}</h1>
+  {% if not me_admin and not my_dept %}<div class="warn">حسابك غير مرتبط بقسم. اطلب من المشرف العام ربطه بقسمك.</div>{% endif %}
+  {% if moved %}<div class="okmsg">تمت إحالة التذكرة <b dir="ltr">{{ moved }}</b> إلى القسم المختص، ولم تعد ضمن قائمة قسمك.</div>{% endif %}
   <div class="kpis">
-    <div class="kpi"><b>{{ counts.get('new',0) }}</b><span>جديدة</span></div>
-    <div class="kpi"><b>{{ counts.get('in_progress',0) }}</b><span>قيد المعالجة</span></div>
-    <div class="kpi"><b>{{ counts.get('closed',0) }}</b><span>مغلقة</span></div>
-    <div class="kpi"><b>{{ counts.values()|sum }}</b><span>الإجمالي</span></div>
+    <a class="kpi" href="/admin?status=new"><b>{{ counts.get('new',0) + counts.get('escalated',0) }}</b><span>واردة لم تُعالج</span></a>
+    <a class="kpi" href="/admin?status=in_progress"><b>{{ counts.get('in_progress',0) }}</b><span>قيد المعالجة</span></a>
+    <a class="kpi late" href="/admin?late=1"><b>{{ late }}</b><span>متأخرة عن المهلة</span></a>
+    <a class="kpi" href="/admin?status=closed"><b>{{ counts.get('closed',0) }}</b><span>مغلقة</span></a>
+    <a class="kpi" href="/admin"><b>{{ counts.values()|sum }}</b><span>الإجمالي</span></a>
   </div>
+  {% if summary %}
+  <details class="panel" open><summary><b>حسب القسم</b></summary>
+  <div class="tablewrap"><table class="tbl summary">
+    <thead><tr><th>القسم</th><th>مفتوحة</th><th>متأخرة</th><th>المهلة</th></tr></thead>
+    <tbody>{% for d, c in summary %}<tr>
+      <td><a href="/admin?dept={{ d.id }}&status=open">{{ d.name_ar }}</a>{% if not d.active %} <span class="anon-tag">موقوف</span>{% endif %}</td>
+      <td>{{ c[0] or 0 }}</td><td>{% if c[1] %}<a class="late-txt" href="/admin?dept={{ d.id }}&late=1">{{ c[1] }}</a>{% else %}0{% endif %}</td>
+      <td>{{ d.sla_days }} أيام عمل</td></tr>{% endfor %}</tbody></table></div>
+  </details>
+  {% endif %}
   <form class="filters" method="get" action="/admin">
-    <select name="status"><option value="">كل الحالات</option>{% for k,l in statuses.items() %}<option value="{{k}}" {% if f.status==k %}selected{% endif %}>{{l}}</option>{% endfor %}</select>
-    <select name="type"><option value="">كل الأنواع</option>{% for k,l in types.items() %}<option value="{{k}}" {% if f.type==k %}selected{% endif %}>{{l}}</option>{% endfor %}</select>
-    <select name="facility"><option value="">كل المنشآت</option>{% for x in facilities %}<option {% if f.facility==x %}selected{% endif %}>{{x}}</option>{% endfor %}</select>
+    <select name="status" aria-label="الحالة"><option value="">كل الحالات</option><option value="open" {% if f.status=='open' %}selected{% endif %}>المفتوحة فقط</option>{% for k,l in statuses.items() %}<option value="{{k}}" {% if f.status==k %}selected{% endif %}>{{l}}</option>{% endfor %}</select>
+    {% if me_admin %}<select name="dept" aria-label="القسم"><option value="">كل الأقسام</option>{% for d in depts %}<option value="{{ d.id }}" {% if f.dept==d.id|string %}selected{% endif %}>{{ d.name_ar }}</option>{% endfor %}</select>{% endif %}
+    <select name="topic" aria-label="الموضوع"><option value="">كل المواضيع</option>{% for k,l in topic_names.items() %}<option value="{{k}}" {% if f.topic==k %}selected{% endif %}>{{l}}</option>{% endfor %}</select>
+    <select name="type" aria-label="النوع"><option value="">كل الأنواع</option>{% for k,l in types.items() %}<option value="{{k}}" {% if f.type==k %}selected{% endif %}>{{l}}</option>{% endfor %}</select>
+    <select name="facility" aria-label="المنشأة"><option value="">كل المنشآت</option>{% for x in facilities %}<option {% if f.facility==x %}selected{% endif %}>{{x}}</option>{% endfor %}</select>
+    <label class="chk"><input type="checkbox" name="late" value="1" {% if f.late %}checked{% endif %}> <span>المتأخرة فقط</span></label>
     <input type="text" name="q" value="{{ f.q }}" placeholder="بحث: رقم التذكرة، اسم، رقم وظيفي، بريد، جوال، نص">
     <button class="btn solid" type="submit">تصفية</button>
     <a class="btn" href="/admin/export.csv{% if qs %}?{{ qs }}{% endif %}">تصدير CSV</a>
   </form>
   <p class="count">{{ total }} تذكرة</p>
   <div class="tablewrap"><table class="tbl">
-    <thead><tr><th>الرقم</th><th>التاريخ</th><th>النوع</th><th>الاسم</th><th>الرقم الوظيفي</th><th>المنشأة</th><th>الحالة</th></tr></thead>
+    <thead><tr><th>الرقم</th><th>التاريخ</th><th>النوع</th><th>الموضوع</th>{% if me_admin %}<th>القسم الحالي</th>{% endif %}<th>مقدّم الطلب</th><th>المنشأة</th><th>الحالة</th><th>المهلة</th></tr></thead>
     <tbody>
-    {% for r in rows %}
-      <tr><td><a href="/admin/t/{{ r.ref }}" dir="ltr">{{ r.ref }}</a></td><td>{{ r.created_at|dt }}</td><td>{{ types.get(r.req_type, r.req_type) }}</td><td>{{ r.name }}</td><td dir="ltr">{{ r.emp_no }}</td><td>{{ r.facility }}</td><td><span class="badge st-{{ r.status }}">{{ statuses.get(r.status, r.status) }}</span></td></tr>
-    {% else %}<tr><td colspan="7" class="center">لا توجد تذاكر.</td></tr>{% endfor %}
+    {% for r in rows %}{% set is_late = r.status != 'closed' and r.due_at and r.due_at < now %}
+      <tr {% if is_late %}class="is-late"{% endif %}><td><a href="/admin/t/{{ r.ref }}" dir="ltr">{{ r.ref }}</a></td><td>{{ r.created_at|dt }}</td>
+        <td>{{ types.get(r.req_type, r.req_type) }}</td><td>{{ topic_names.get(r.topic, '—') }}</td>
+        {% if me_admin %}<td>{{ dept_names.get(r.dept_id, '—') }}</td>{% endif %}
+        <td>{% if r.anonymous %}<span class="anon-tag">مجهول</span>{% else %}{{ r.name }} <small dir="ltr">{{ r.emp_no }}</small>{% endif %}</td>
+        <td>{{ r.facility or '—' }}</td>
+        <td><span class="badge st-{{ r.status }}">{{ statuses.get(r.status, r.status) }}</span></td>
+        <td>{% if r.status == 'closed' %}—{% elif is_late %}<span class="late-txt">متأخرة منذ {{ r.due_at|dt }}</span>{% else %}{{ r.due_at|dt if r.due_at else '—' }}{% endif %}</td></tr>
+    {% else %}<tr><td colspan="9" class="center">لا توجد تذاكر.</td></tr>{% endfor %}
     </tbody></table></div>
   <div class="pager">
     {% if page>1 %}<a class="btn" href="/admin?page={{ page-1 }}{% if qs %}&{{ qs }}{% endif %}">السابق</a>{% endif %}

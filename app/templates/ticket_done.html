@@ -8,7 +8,13 @@
     <h1 class="h1s ok-h">{{ t.dn_h }}</h1>
     <p>{{ t.dn_your }}</p>
     <p><span class="ref">{{ ref }}</span></p>
+    {% if code %}
+    <p>{{ t.dn_code }}</p>
+    <p><span class="ref">{{ code[:4] }}-{{ code[4:] }}</span></p>
+    <p>{{ t.dn_code_keep|safe }}</p>
+    {% else %}
     <p>{{ t.dn_keep|safe }}</p>
+    {% endif %}
     <p class="btns"><a class="btn solid" href="{{ u.status }}">{{ t.dn_track }}</a> <a class="btn" href="{{ u.home }}">{{ t.dn_home }}</a></p>
   </div>
 {% else %}
