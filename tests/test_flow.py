@@ -60,7 +60,8 @@ h = c.post("/status", data=dict(csrf_token=t2, ref="SHQ-261101-OLD22", email="ol
 # admin
 a = A.app.test_client(); r, h = get(a, "/admin/login")
 r = a.post("/admin/login", data=dict(csrf_token=tok(h), username="admin", password="adminpass123")); ok(r.status_code == 302, "env admin login")
-r, h = get(a, "/admin"); ok(ref1 in h and ref2 in h and "حسب القسم" in h, "admin sees all + per-section summary")
+r, h = get(a, "/admin"); ok(ref1 in h and ref2 in h and "نظرة على الأقسام" in h, "admin sees all + per-section summary")
+ok('aria-current="page">المفتوحة' in h, "default tab is open tickets")
 # create staff for leaves (dept id of leaves)
 leaves = sqlite3.connect(D + "/tickets.db").execute("SELECT id FROM departments WHERE key='leaves'").fetchone()[0]
 care = 1
@@ -310,4 +311,17 @@ r, h = get(c, "/en/ticket/done"); aref = re.findall(r'<span class="ref">([^<]+)<
 ok(sqlite3.connect(D + "/tickets.db").execute("SELECT lang, kiosk_id FROM tickets WHERE ref=?", (aref,)).fetchone() == ("", None), "anonymous: language not stored")
 r, h = get(a, "/admin/t/" + aref); ok("لغة التقديم" not in h and "الوقت مخفي" in h, "anonymous: no language, date only")
 A.backup_daily(); ok(any(f_.startswith("tickets-") for f_ in os.listdir(D + "/backups")), "daily backup file written")
+
+# ---------------- ticket list layout
+con = sqlite3.connect(D + "/tickets.db")
+r, h = get(a, "/admin"); ok('aria-current="page">المفتوحة' in h and "تحتاج إجراء" in h and "تصفية متقدمة" in h, "list: tabs, open by default, advanced filters folded")
+closed_ref = con.execute("SELECT ref FROM tickets WHERE status='closed' LIMIT 1").fetchone()[0]
+ok('href="/admin/t/%s"' % closed_ref not in h, "closed tickets not in the default (open) view")
+r, h = get(a, "/admin?status=all"); ok('href="/admin/t/%s"' % closed_ref in h, "all tab includes closed")
+lr = con.execute("SELECT ref FROM tickets WHERE status IN ('new','escalated','in_progress') ORDER BY id LIMIT 1").fetchone()[0]
+con.execute("UPDATE tickets SET due_at='2026-01-02T00:00:00Z' WHERE ref=?", (lr,)); con.commit()
+r, h = get(a, "/admin"); first = re.search(r'class="tl-row[^"]*" href="/admin/t/([^"]+)"', h).group(1)
+ok(first == lr, "late ticket listed first (%s)" % first)
+r, h = get(a, "/admin?status=act"); ok(r.status_code == 200, "needs-action tab")
+r, h = get(a, "/admin?late=1&q=" + lr); ok(lr in h, "search inside late tab")
 print("ALL OK")

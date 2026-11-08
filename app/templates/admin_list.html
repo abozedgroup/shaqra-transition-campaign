@@ -1,29 +1,106 @@
 {% extends "base.html" %}
-{% block title %}لوحة التذاكر{% endblock %}
+{% block title %}التذاكر{% endblock %}
+{% macro tab(key, cur, label, n, href, cls='') %}<a href="{{ href }}" class="stab {{ cls }}{{ ' cur' if key == cur else '' }}"{% if key == cur %} aria-current="page"{% endif %}>{{ label }} <span class="n">{{ n }}</span></a>{% endmacro %}
 {% block body %}
-<section class="s adm"><div class="wrap wide">
+{% set cur = 'late' if f.late else (f.status or 'all') %}
+{% set open_n = counts.get('new',0) + counts.get('escalated',0) + counts.get('in_progress',0) %}
+<section class="s adm tl-page"><div class="wrap wide">
   {% set anav='list' %}{% include "_adminnav.html" %}
-  <h1 class="h1s">{% if me_admin %}لوحة التذاكر – كل الأقسام{% else %}تذاكر قسم {{ my_dept.name_ar if my_dept else '—' }}{% endif %}</h1>
+
+  <header class="tl-head">
+    <h1>{% if me_admin %}التذاكر – كل الأقسام{% else %}تذاكر {{ my_dept.name_ar if my_dept else '—' }}{% endif %}</h1>
+    <form class="quickopen" method="get" action="/admin/open">
+      <label for="qref">فتح تذكرة برقمها</label>
+      <input type="text" id="qref" name="ref" inputmode="numeric" dir="ltr" class="ltr-field" placeholder="1024" autocomplete="off" required>
+      <button class="btn solid" type="submit">فتح</button>
+    </form>
+  </header>
+
   {% if not me_admin and not my_dept %}<div class="warn">حسابك غير مرتبط بقسم. اطلب من المشرف العام ربطه بقسمك.</div>{% endif %}
-  <form class="quickopen" method="get" action="/admin/open">
-    <label for="qref">فتح تذكرة برقمها</label>
-    <input type="text" id="qref" name="ref" inputmode="numeric" dir="ltr" class="ltr-field" placeholder="1024" autocomplete="off" required>
-    <button class="btn solid" type="submit">فتح</button>
-    {% if me.id %}<a class="btn" href="/admin?mine=1&status=open">تذاكري المفتوحة</a>{% endif %}
-    <a class="btn" href="/admin?channel=walkin&status=open">الحضورية المفتوحة</a>
-  </form>
   {% if notfound %}<div class="warn">لا توجد تذكرة برقم <b dir="ltr">{{ notfound }}</b> ضمن صلاحياتك.</div>{% endif %}
   {% if moved %}<div class="okmsg">تمت إحالة التذكرة <b dir="ltr">{{ moved }}</b> إلى القسم المختص، ولم تعد ضمن قائمة قسمك.</div>{% endif %}
-  <div class="kpis">
-    <a class="kpi" href="/admin?status=new"><b>{{ counts.get('new',0) + counts.get('escalated',0) }}</b><span>واردة لم تُعالج</span></a>
-    <a class="kpi" href="/admin?status=in_progress"><b>{{ counts.get('in_progress',0) }}</b><span>قيد المعالجة</span></a>
-    <a class="kpi" href="/admin?status=resolved"><b>{{ counts.get('resolved',0) }}</b><span>بانتظار تقييم الموظف</span></a>
-    <a class="kpi late" href="/admin?late=1"><b>{{ late }}</b><span>متأخرة عن المهلة</span></a>
-    <a class="kpi" href="/admin?status=closed"><b>{{ counts.get('closed',0) }}</b><span>مغلقة</span></a>
-    <a class="kpi" href="/admin"><b>{{ counts.values()|sum }}</b><span>الإجمالي</span></a>
+
+  {# ---------- status tabs (replace the number cards) ---------- #}
+  <nav class="stabs" aria-label="حالة التذاكر">
+    {{ tab('open', cur, 'المفتوحة', open_n, '/admin?status=open' ~ ('&' ~ adv if adv else '')) }}
+    {{ tab('act', cur, 'تحتاج إجراء', counts.get('new',0) + counts.get('escalated',0), '/admin?status=act' ~ ('&' ~ adv if adv else ''), 'hot' if (counts.get('new',0) + counts.get('escalated',0)) else '') }}
+    {{ tab('in_progress', cur, 'قيد المعالجة', counts.get('in_progress',0), '/admin?status=in_progress' ~ ('&' ~ adv if adv else '')) }}
+    {{ tab('late', cur, 'متأخرة', late, '/admin?late=1' ~ ('&' ~ adv if adv else ''), 'warn-tab' if late else '') }}
+    {{ tab('resolved', cur, 'بانتظار التقييم', counts.get('resolved',0), '/admin?status=resolved' ~ ('&' ~ adv if adv else '')) }}
+    {{ tab('closed', cur, 'مغلقة', counts.get('closed',0), '/admin?status=closed' ~ ('&' ~ adv if adv else '')) }}
+    {{ tab('all', cur, 'الكل', counts.values()|sum, '/admin?status=all' ~ ('&' ~ adv if adv else '')) }}
+  </nav>
+
+  {# ---------- search + advanced filters ---------- #}
+  <form class="tl-search" method="get" action="/admin">
+    <input type="hidden" name="status" value="{{ f.status or 'all' }}">{% if f.late %}<input type="hidden" name="late" value="1">{% endif %}
+    <input type="search" name="q" value="{{ f.q }}" placeholder="ابحث برقم التذكرة أو الاسم أو الرقم الوظيفي أو الجوال أو نص الطلب" aria-label="بحث">
+    <button class="btn solid" type="submit">بحث</button>
+    {% if me.id %}<label class="chk mine"><input type="checkbox" name="mine" value="1" {% if f.mine %}checked{% endif %} data-autosubmit-cb> <span>تذاكري فقط{% if mine %} ({{ mine }} مفتوحة){% endif %}</span></label>{% endif %}
+    <details class="adv" {% if adv_open %}open{% endif %}><summary>تصفية متقدمة{% if adv_open %} <span class="n">مفعّلة</span>{% endif %}</summary>
+      <div class="adv-grid">
+        {% if me_admin %}<label>القسم<select name="dept"><option value="">كل الأقسام</option>{% for d in depts %}<option value="{{ d.id }}" {% if f.dept==d.id|string %}selected{% endif %}>{{ d.name_ar }}</option>{% endfor %}</select></label>{% endif %}
+        <label>الموضوع<select name="topic"><option value="">كل المواضيع</option>{% for k,l in topic_names.items() %}<option value="{{k}}" {% if f.topic==k %}selected{% endif %}>{{l}}</option>{% endfor %}</select></label>
+        <label>النوع<select name="type"><option value="">كل الأنواع</option>{% for k,l in types.items() %}<option value="{{k}}" {% if f.type==k %}selected{% endif %}>{{l}}</option>{% endfor %}</select></label>
+        <label>القناة<select name="channel"><option value="">كل القنوات</option>{% for k,l in channels.items() %}<option value="{{k}}" {% if f.channel==k %}selected{% endif %}>{{l}}</option>{% endfor %}</select></label>
+        <label>المنشأة<select name="facility"><option value="">كل المنشآت</option>{% for x in facilities %}<option {% if f.facility==x %}selected{% endif %}>{{x}}</option>{% endfor %}</select></label>
+      </div>
+      <div class="actions"><button class="btn solid" type="submit">تطبيق</button><a class="btn" href="/admin">مسح التصفية</a></div>
+    </details>
+  </form>
+
+  <div class="tl-bar">
+    <span class="count">{{ total }} تذكرة{% if f.q %} تطابق «{{ f.q }}»{% endif %}</span>
+    <a class="small-link" href="/admin/export.csv{% if qs %}?{{ qs }}{% endif %}">تصدير هذه القائمة (CSV)</a>
   </div>
+
+  {# ---------- the list ---------- #}
+  <div class="tl-list" role="list">
+    {% for r in rows %}
+    {% set is_open = r.status in ('new','escalated','in_progress') %}
+    {% set is_late = is_open and r.due_at and r.due_at < now %}
+    {% set ap = appts.get(r.id) %}
+    <a class="tl-row {{ 'late' if is_late }} s-{{ r.status }}" href="/admin/t/{{ r.ref }}" role="listitem">
+      <span class="tl-ref"><b dir="ltr">{{ r.ref }}</b>
+        {% if r.channel == 'walkin' and not r.anonymous %}<span class="badge ch-walkin">حضوري</span>{% endif %}</span>
+      <span class="tl-main">
+        <span class="tl-who">{% if r.anonymous %}<span class="anon-tag">مجهول</span>{% else %}{{ r.name }}{% endif %}
+          <span class="tl-topic">· {{ topic_names.get(r.topic, '—') }}{% if r.req_type == 'feedback' %} · {{ types.get(r.req_type) }}{% endif %}</span></span>
+        <span class="tl-msg">{{ r.message|truncate(110, True, '…') }}</span>
+      </span>
+      <span class="tl-state">
+        <span class="badge st-{{ r.status }}">{{ statuses.get(r.status, r.status) }}</span>
+        <span class="tl-next">
+          {% if ap and ap.status == 'serving' %}<b>قيد الخدمة الحضورية الآن</b>
+          {% elif ap and ap.status == 'checked_in' %}<b class="hot-txt">حاضر وينتظر</b>
+          {% elif ap and ap.status in ('requested','change_requested') %}<b class="hot-txt">يطلب موعدًا – احجز له</b>
+          {% elif ap and ap.slot and ap.kind == 'appointment' %}موعد {{ ap.slot|slot }}
+          {% elif r.status in ('new','escalated') %}تحتاج رد أو إجراء
+          {% elif r.status == 'in_progress' %}{% if r.assigned_user_id %}لدى {{ users.get(r.assigned_user_id, '') }}{% else %}لم يستلمها أحد بعد{% endif %}
+          {% elif r.status == 'resolved' %}بانتظار تقييمه حتى {{ r.rate_due_at|day }}
+          {% elif r.rating %}<span class="stars-txt" aria-label="{{ r.rating }} من 5">{% for n in range(5) %}{{ '★' if n < r.rating else '☆' }}{% endfor %}</span>
+          {% else %}مغلقة{% endif %}
+        </span>
+      </span>
+      <span class="tl-due">
+        {% if is_late %}<span class="late-txt">متأخرة منذ {{ r.due_at|dt }}</span>
+        {% elif is_open %}<small>المهلة</small> {{ r.due_at|dt if r.due_at else '—' }}
+        {% else %}<small>قُدّمت</small> {{ r.created_at|day }}{% endif %}
+        {% if me_admin %}<small class="tl-dept">{{ dept_names.get(r.dept_id, '—') }}</small>{% endif %}
+      </span>
+    </a>
+    {% else %}
+    <div class="tl-empty">{% if cur in ('open','act') %}لا توجد تذاكر تحتاج عملًا الآن. 👍{% else %}لا توجد تذاكر هنا.{% endif %}</div>
+    {% endfor %}
+  </div>
+
+  <div class="pager">
+    {% if page>1 %}<a class="btn" href="/admin?page={{ page-1 }}{% if qs %}&{{ qs }}{% endif %}">السابق</a>{% endif %}
+    {% if page*per < total %}<a class="btn" href="/admin?page={{ page+1 }}{% if qs %}&{{ qs }}{% endif %}">التالي</a>{% endif %}
+  </div>
+
   {% if summary %}
-  <details class="panel" open><summary><b>حسب القسم</b></summary>
+  <details class="card mt18 dept-sum"><summary class="card-h">نظرة على الأقسام</summary>
   <div class="tablewrap"><table class="tbl summary">
     <thead><tr><th>القسم</th><th>مفتوحة</th><th>متأخرة</th><th>المهلة</th></tr></thead>
     <tbody>{% for d, c in summary %}<tr>
@@ -32,36 +109,6 @@
       <td>{{ d.sla_days }} أيام عمل</td></tr>{% endfor %}</tbody></table></div>
   </details>
   {% endif %}
-  <form class="filters" method="get" action="/admin">
-    <select name="status" aria-label="الحالة"><option value="">كل الحالات</option><option value="open" {% if f.status=='open' %}selected{% endif %}>المفتوحة فقط</option>{% for k,l in statuses.items() %}<option value="{{k}}" {% if f.status==k %}selected{% endif %}>{{l}}</option>{% endfor %}</select>
-    {% if me_admin %}<select name="dept" aria-label="القسم"><option value="">كل الأقسام</option>{% for d in depts %}<option value="{{ d.id }}" {% if f.dept==d.id|string %}selected{% endif %}>{{ d.name_ar }}</option>{% endfor %}</select>{% endif %}
-    <select name="topic" aria-label="الموضوع"><option value="">كل المواضيع</option>{% for k,l in topic_names.items() %}<option value="{{k}}" {% if f.topic==k %}selected{% endif %}>{{l}}</option>{% endfor %}</select>
-    <select name="type" aria-label="النوع"><option value="">كل الأنواع</option>{% for k,l in types.items() %}<option value="{{k}}" {% if f.type==k %}selected{% endif %}>{{l}}</option>{% endfor %}</select>
-    <select name="channel" aria-label="القناة"><option value="">كل القنوات</option>{% for k,l in channels.items() %}<option value="{{k}}" {% if f.channel==k %}selected{% endif %}>{{l}}</option>{% endfor %}</select>
-    <select name="facility" aria-label="المنشأة"><option value="">كل المنشآت</option>{% for x in facilities %}<option {% if f.facility==x %}selected{% endif %}>{{x}}</option>{% endfor %}</select>
-    <label class="chk"><input type="checkbox" name="late" value="1" {% if f.late %}checked{% endif %}> <span>المتأخرة فقط</span></label>
-    {% if me.id %}<label class="chk"><input type="checkbox" name="mine" value="1" {% if f.mine %}checked{% endif %}> <span>تذاكري فقط</span></label>{% endif %}
-    <input type="text" name="q" value="{{ f.q }}" placeholder="بحث: رقم التذكرة، اسم، رقم وظيفي، بريد، جوال، نص">
-    <button class="btn solid" type="submit">تصفية</button>
-    <a class="btn" href="/admin/export.csv{% if qs %}?{{ qs }}{% endif %}">تصدير CSV</a>
-  </form>
-  <p class="count">{{ total }} تذكرة</p>
-  <div class="tablewrap"><table class="tbl">
-    <thead><tr><th>الرقم</th><th>التاريخ</th><th>النوع</th><th>الموضوع</th>{% if me_admin %}<th>القسم الحالي</th>{% endif %}<th>مقدّم الطلب</th><th>المنشأة</th><th>الحالة</th><th>المهلة</th></tr></thead>
-    <tbody>
-    {% for r in rows %}{% set is_late = r.status != 'closed' and r.due_at and r.due_at < now %}
-      <tr {% if is_late %}class="is-late"{% endif %}><td><a href="/admin/t/{{ r.ref }}" dir="ltr">{{ r.ref }}</a>{% if r.channel == 'walkin' and not r.anonymous %} <span class="badge ch-walkin">حضوري</span>{% endif %}</td><td>{{ r.created_at|day if r.anonymous else r.created_at|dt }}</td>
-        <td>{{ types.get(r.req_type, r.req_type) }}</td><td>{{ topic_names.get(r.topic, '—') }}</td>
-        {% if me_admin %}<td>{{ dept_names.get(r.dept_id, '—') }}</td>{% endif %}
-        <td>{% if r.anonymous %}<span class="anon-tag">مجهول</span>{% else %}{{ r.name }} <small dir="ltr">{{ r.emp_no }}</small>{% endif %}</td>
-        <td>{{ r.facility or '—' }}</td>
-        <td><span class="badge st-{{ r.status }}">{{ statuses.get(r.status, r.status) }}</span></td>
-        <td>{% if r.status == 'closed' %}{{ ('★ %d' % r.rating) if r.rating else '—' }}{% elif r.status == 'resolved' %}تقييم حتى {{ r.rate_due_at|dt }}{% elif is_late %}<span class="late-txt">متأخرة منذ {{ r.due_at|dt }}</span>{% else %}{{ r.due_at|dt if r.due_at else '—' }}{% endif %}</td></tr>
-    {% else %}<tr><td colspan="9" class="center">لا توجد تذاكر.</td></tr>{% endfor %}
-    </tbody></table></div>
-  <div class="pager">
-    {% if page>1 %}<a class="btn" href="/admin?page={{ page-1 }}{% if qs %}&{{ qs }}{% endif %}">السابق</a>{% endif %}
-    {% if page*per < total %}<a class="btn" href="/admin?page={{ page+1 }}{% if qs %}&{{ qs }}{% endif %}">التالي</a>{% endif %}
-  </div>
 </div></section>
 {% endblock %}
+{% block scripts %}<script src="/app-static/admin.js"></script>{% endblock %}

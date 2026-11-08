@@ -1304,12 +1304,17 @@ def _overdue_sql():
     return ("(status IN ('new','escalated','in_progress') AND due_at<>'' AND due_at<?)", now_utc())
 
 
-def _filters(u):
+def _filters(u, default_status=""):
     f = {k: clean(request.args.get(k), 60) for k in ("status", "facility", "type", "q", "topic", "dept", "late",
                                                         "channel", "mine")}
+    f["status"] = f["status"] or default_status
     where, args = _visible(u)
     if f["status"] == "open":
         where.append("status IN ('new','escalated','in_progress')")
+    elif f["status"] == "act":
+        where.append("status IN ('new','escalated')")
+    elif f["status"] == "all":
+        pass
     elif f["status"] in STATUSES:
         where.append("status=?"); args.append(f["status"])
     else:
@@ -1372,22 +1377,42 @@ def admin_open():
 @login_required
 def admin_list():
     u = current_user()
-    f, where, args = _filters(u)
+    # with no filter at all, staff land on the work that is still open
+    no_filter = not any(request.args.get(k) for k in ("status", "late", "q", "dept", "topic", "type", "channel",
+                                                      "facility", "mine", "page"))
+    f, where, args = _filters(u, "open" if no_filter else "")
     try:
         page = min(100000, max(1, int(request.args.get("page", "1"))))
     except ValueError:
         page = 1
     per = 30
     con = db()
+    now = now_utc()
     total = con.execute("SELECT COUNT(*) FROM tickets" + where, args).fetchone()[0]
-    rows = con.execute("SELECT * FROM tickets" + where +
-                       " ORDER BY CASE WHEN status='closed' THEN 1 ELSE 0 END, id DESC LIMIT ? OFFSET ?",
-                       args + [per, (page - 1) * per]).fetchall()
+    # most urgent first: open (late first, then nearest deadline), then waiting for rating, then closed (newest)
+    rows = con.execute(
+        "SELECT * FROM tickets" + where +
+        " ORDER BY CASE WHEN status IN ('new','escalated','in_progress') THEN 0 WHEN status='resolved' THEN 1 ELSE 2 END,"
+        " CASE WHEN status IN ('new','escalated','in_progress') AND due_at<>'' AND due_at<? THEN 0 ELSE 1 END,"
+        " CASE WHEN status IN ('new','escalated','in_progress') THEN due_at ELSE '' END, id DESC LIMIT ? OFFSET ?",
+        args + [now, per, (page - 1) * per]).fetchall()
     vw, va = _visible(u)
     vsql = (" WHERE " + " AND ".join(vw)) if vw else ""
     counts = {r[0]: r[1] for r in con.execute("SELECT status, COUNT(*) FROM tickets" + vsql + " GROUP BY status", va)}
     osql, oarg = _overdue_sql()
     late = con.execute("SELECT COUNT(*) FROM tickets WHERE " + " AND ".join(vw + [osql]), va + [oarg]).fetchone()[0]
+    mine = 0
+    if u["id"]:
+        mine = con.execute("SELECT COUNT(*) FROM tickets WHERE assigned_user_id=? AND status IN "
+                           "('new','escalated','in_progress')", (u["id"],)).fetchone()[0]
+    # live appointment per listed ticket, for the "what it needs" column
+    appts = {}
+    ids = [r["id"] for r in rows]
+    if ids:
+        for a in con.execute("SELECT ticket_id, status, slot, kind FROM appointments WHERE ticket_id IN (%s) AND "
+                             "status NOT IN ('done','no_show','cancelled') ORDER BY id" % ",".join("?" * len(ids)), ids):
+            appts[a["ticket_id"]] = a
+    users = {r[0]: r[1] for r in con.execute("SELECT id, display_name FROM users")}
     depts = all_depts()
     summary = []
     if is_admin_user(u):
@@ -1397,13 +1422,16 @@ def admin_list():
         summary = [(d, per_dept.get(d["id"], (0, 0))) for d in depts if d["active"] or d["id"] in per_dept]
     from urllib.parse import quote
     qs = "&".join("%s=%s" % (k, quote(v)) for k, v in f.items() if v)
+    adv = "&".join("%s=%s" % (k, quote(v)) for k, v in f.items() if v and k not in ("status", "late"))
     my_dept = dept_by_id(u["dept_id"]) if u["dept_id"] else None
     return render_template("admin_list.html", rows=rows, f=f, total=total, page=page, per=per,
-                           counts=counts, late=late, statuses=STATUSES, types=REQ_TYPES, facilities=FACILITIES,
-                           qs=qs, depts=depts, dept_names={d["id"]: d["name_ar"] for d in depts},
-                           topic_names=_topic_names(), summary=summary, now=now_utc(), my_dept=my_dept,
+                           counts=counts, late=late, mine=mine, statuses=STATUSES, types=REQ_TYPES,
+                           facilities=FACILITIES, qs=qs, adv=adv, depts=depts,
+                           dept_names={d["id"]: d["name_ar"] for d in depts}, users=users, appts=appts,
+                           topic_names=_topic_names(), summary=summary, now=now, my_dept=my_dept,
                            moved=clean(request.args.get("moved"), 30), channels=CHANNELS,
-                           notfound=clean(request.args.get("notfound"), 20))
+                           notfound=clean(request.args.get("notfound"), 20),
+                           adv_open=any(f[k] for k in ("dept", "topic", "type", "channel", "facility", "mine")))
 
 
 # ---------------------------------------------------------------- one ticket

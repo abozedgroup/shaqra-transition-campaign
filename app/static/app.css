@@ -245,3 +245,63 @@ details.more[open] summary{margin-bottom:12px}
   .tk-main,.tk-side{display:contents}
   .o-req{order:1}.o-who{order:2}.o-act{order:3}.o-rate{order:4}.o-log{order:5}.o-info{order:6}.o-more{order:7}
 }
+
+/* ---------- ticket list ---------- */
+.tl-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:10px 20px;margin:0 0 14px}
+.tl-head h1{margin:0;font-size:26px;color:var(--navy)}
+.tl-head .quickopen{margin:0}
+.stabs{display:flex;flex-wrap:wrap;gap:6px;border-bottom:2px solid var(--line);margin:0 0 14px}
+.stab{display:inline-flex;align-items:center;gap:8px;padding:9px 14px;margin-bottom:-2px;border-bottom:3px solid transparent;text-decoration:none;color:var(--muted);font-weight:700;font-size:15.5px}
+.stab .n{display:inline-block;min-width:24px;text-align:center;padding:0 7px;border-radius:99px;background:var(--soft);border:1px solid var(--line);color:var(--navy);font-size:13px}
+.stab.cur{color:var(--navy);border-bottom-color:#2a78d6}
+.stab.cur .n{background:#2a78d6;border-color:#2a78d6;color:#fff}
+.stab.hot .n{background:#fde8e6;border-color:#f3c2bc;color:#a8322a}
+.stab.warn-tab .n{background:#b03a2e;border-color:#b03a2e;color:#fff}
+.stab:focus-visible{outline:3px solid #e0a800;outline-offset:2px;border-radius:6px}
+.tl-search{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center;margin:0 0 6px}
+.tl-search input[type=search]{flex:1 1 320px;min-width:0}
+.tl-search .mine{margin:0}
+.tl-page details.adv{flex-basis:100%;background:none;border:0;padding:0;margin:0;border-radius:0}
+.tl-page details.adv>summary{display:inline-flex;gap:8px;padding:4px 0;min-height:0;color:#1f5fae;font-size:15px}
+.tl-page details.adv>summary::after{content:none}
+.tl-page details.adv .n{background:#e3f0fb;border-radius:99px;padding:0 8px;font-size:12.5px}
+.adv-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;margin:8px 0}
+.adv-grid label{display:flex;flex-direction:column;gap:4px;font-weight:700;font-size:14px;color:var(--navy)}
+.tl-bar{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px;align-items:center;margin:10px 0 8px;color:var(--muted)}
+.small-link{font-size:14px}
+.tl-list{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:#fff}
+.tl-row{display:grid;grid-template-columns:110px minmax(0,1fr) 260px 190px;gap:6px 16px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line);text-decoration:none;color:inherit;border-inline-start:4px solid transparent}
+.tl-row:last-child{border-bottom:0}
+.tl-row:hover{background:#f6f9fd}
+.tl-row:focus-visible{outline:3px solid #e0a800;outline-offset:-3px}
+.tl-row.s-new,.tl-row.s-escalated{border-inline-start-color:#2a78d6}
+.tl-row.late{border-inline-start-color:#b03a2e;background:#fff8f7}
+.tl-row.s-closed{opacity:.8}
+.tl-ref{display:flex;flex-direction:column;align-items:flex-start;gap:4px}
+.tl-ref b{font-size:19px;color:var(--navy)}
+.tl-main{display:flex;flex-direction:column;gap:2px;min-width:0}
+.tl-who{font-weight:800;color:var(--navy)}
+.tl-topic{font-weight:500;color:var(--muted);font-size:14px}
+.tl-msg{color:#3d4655;font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tl-state{display:flex;flex-direction:column;align-items:flex-start;gap:4px}
+.tl-next{font-size:14px;color:#3d4655}
+.hot-txt{color:#a8322a}
+.tl-due{display:flex;flex-direction:column;font-size:14px;gap:2px}
+.tl-due small{color:var(--muted)}
+.tl-dept{font-weight:700}
+.tl-empty{padding:28px;text-align:center;color:var(--muted)}
+.tl-page details.dept-sum>summary{padding:0}
+@media(max-width:900px){
+  .tl-row{grid-template-columns:auto minmax(0,1fr);grid-template-areas:"ref state" "main main" "due due"}
+  .tl-ref{grid-area:ref;flex-direction:row;align-items:center}.tl-main{grid-area:main}
+  .tl-state{grid-area:state;align-items:flex-end;text-align:end}.tl-due{grid-area:due;flex-direction:row;flex-wrap:wrap;gap:4px 12px}
+  .tl-msg{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+  .stabs{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:thin}
+  .stab{white-space:nowrap}
+}
+@media(max-width:900px){
+  .tl-head .quickopen{flex-wrap:nowrap;width:100%}
+  .tl-head .quickopen input{flex:1 1 auto;width:auto;min-width:0}
+  .tl-search{flex-wrap:wrap}
+  .tl-search input[type=search]{flex:1 1 0}
+}

@@ -67,4 +67,8 @@
     show(first, false);
     if (location.hash === '#appt') { var act = document.getElementById('act'); if (act) act.scrollIntoView(); }
   }
+  // checkboxes that apply a filter right away ("my tickets only")
+  [].forEach.call(document.querySelectorAll('input[data-autosubmit-cb]'), function (c) {
+    c.addEventListener('change', function () { c.form.submit(); });
+  });
 })();
