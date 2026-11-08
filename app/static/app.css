@@ -61,3 +61,14 @@
 .rowform{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;align-items:end}
 .rowform .field{margin:0}
 details.edit{margin-top:6px}details.edit summary{cursor:pointer;color:var(--navy);font-weight:700}
+
+/* two request types with explanation */
+.types .type2 span{display:flex;flex-direction:column;gap:2px}
+.types .type2 small{font-weight:400;color:var(--muted);font-size:14px;line-height:1.6}
+/* photos */
+.photos{display:flex;flex-wrap:wrap;gap:10px;margin:8px 0 14px}
+.photos img{width:120px;height:120px;object-fit:cover;border-radius:10px;border:1px solid var(--line);background:#fff;display:block}
+input[type=file]{width:100%;padding:10px;border:1px dashed var(--line);border-radius:10px;background:var(--soft);font:inherit}
+.types{grid-template-columns:1fr}
+@media(min-width:700px){.types{grid-template-columns:repeat(2,1fr)}}
+.types label{align-items:flex-start}.types input{margin-top:4px}

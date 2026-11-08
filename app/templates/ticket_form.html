@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% set nav = 'ticket' %}
-{% macro fld_err(n) %}<span class="err" id="e-{{ n }}">{{ err_msgs[n] }}</span>{% endmacro %}
+{% macro fld_err(n) %}<span class="err" id="e-{{ n }}">{{ errors[n] if n in errors else err_msgs.get(n, '') }}</span>{% endmacro %}
 {% block title %}{{ t.tf_title }}{% endblock %}
 {% block body %}
 <section class="page-head"><div class="wrap">
@@ -15,7 +15,7 @@
   <div class="warn errsum" role="alert" id="errsum" tabindex="-1"><b>{{ t.errsum }}</b>
     <ul>{% for n in err_order if n in errors %}<li><a href="#{{ 'type-first' if n=='req_type' else n }}">{{ errors[n] }}</a></li>{% endfor %}</ul></div>
   {% endif %}
-  <form class="formcard{% if v.anonymous %} anon{% endif %}" id="f" method="post" action="{{ u.ticket }}" novalidate data-start="{{ start }}" data-anon-types="{{ anon_types|join(',') }}">
+  <form class="formcard{% if v.anonymous %} anon{% endif %}" id="f" method="post" action="{{ u.ticket }}" enctype="multipart/form-data" novalidate data-start="{{ start }}" data-anon-types="{{ anon_types|join(',') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="hp" aria-hidden="true"><label>Leave empty<input type="text" name="website" tabindex="-1" autocomplete="off"></label></div>
 
@@ -24,7 +24,7 @@
       <div class="field {% if errors.req_type %}bad{% endif %}" id="g-req_type">
         <span class="legend" id="lg-type">{{ t.lbl_type }}<span class="req" aria-hidden="true"> *</span></span>
         <div class="types" role="radiogroup" aria-labelledby="lg-type" aria-describedby="e-req_type">
-          {% for k, lbl, help in types %}<label><input type="radio" name="req_type" value="{{ k }}" {% if loop.first %}id="type-first"{% endif %} {% if v.req_type==k %}checked{% endif %}> <span>{{ lbl }}</span></label>{% endfor %}
+          {% for k, lbl, help in types %}<label class="type2"><input type="radio" name="req_type" value="{{ k }}" {% if loop.first %}id="type-first"{% endif %} {% if v.req_type==k %}checked{% endif %}> <span><b>{{ lbl }}</b><small>{{ help }}</small></span></label>{% endfor %}
         </div>
         {{ fld_err('req_type') }}
       </div>
@@ -39,6 +39,9 @@
         <textarea id="message" name="message" maxlength="3000" required aria-describedby="m-h e-message">{{ v.message or '' }}</textarea>
         <div class="fgroup spread"><span class="hint" id="m-h">{{ t.hint_message }}</span><span class="counter" dir="ltr"><span id="cnt">0</span> / 3000</span></div>
         {{ fld_err('message') }}</div>
+      <div class="field {% if errors.photos %}bad{% endif %}" id="g-photos"><label for="photos">{{ t.lbl_photos }} <span class="opt">{{ t.photos_opt }}</span></label>
+        <input type="file" id="photos" name="photos" accept="image/*" multiple data-max="{{ max_photos }}" data-msg-count="{{ err_msgs.photos_count }}" data-msg-size="{{ err_msgs.photos_size }}" data-msg-type="{{ err_msgs.photos_type }}" aria-describedby="h-photos e-photos">
+        <span class="hint" id="h-photos">{{ t.hint_photos }}</span>{{ fld_err('photos') }}</div>
       <div class="stepnav"><button type="button" class="btn solid go" data-go="2">{{ t.next }}</button></div>
     </fieldset>
 

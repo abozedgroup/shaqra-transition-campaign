@@ -26,6 +26,16 @@
   var rules = {
     req_type: function () { return !!f.querySelector('input[name=req_type]:checked'); },
     topic: function (v) { return v !== ''; },
+    photos: function () {
+      var inp = f.elements.photos, er = document.getElementById('e-photos');
+      if (!inp || !inp.files) return true;
+      var fs = [].slice.call(inp.files), msg = '';
+      if (fs.length > +(inp.getAttribute('data-max') || 3)) msg = inp.getAttribute('data-msg-count');
+      else if (fs.some(function (x) { return x.size > 8 * 1024 * 1024; })) msg = inp.getAttribute('data-msg-size');
+      else if (fs.some(function (x) { return x.type && x.type.indexOf('image/') !== 0; })) msg = inp.getAttribute('data-msg-type');
+      if (msg && er) er.textContent = msg;
+      return !msg;
+    },
     message: function (v) { return v.trim().length >= 10; },
     name: function (v) { return v.trim().length >= 3; },
     emp_no: function (v) { return /^\d{3,10}$/.test(digits(v)); },
@@ -35,7 +45,7 @@
     mobile: function (v) { return /^05\d{8}$/.test(digits(v)); },
     consent: function () { return f.elements.consent.checked; }
   };
-  var stepOf = { req_type: 1, topic: 1, message: 1, name: 2, emp_no: 2, facility: 2, job_cat: 2, email: 3, mobile: 3, consent: 3 };
+  var stepOf = { req_type: 1, topic: 1, message: 1, photos: 1, name: 2, emp_no: 2, facility: 2, job_cat: 2, email: 3, mobile: 3, consent: 3 };
   var focusId = { req_type: 'type-first' };
   function val(n) { var e = f.elements[n]; return e && e.value !== undefined ? e.value : ''; }
   function check(n, show) {

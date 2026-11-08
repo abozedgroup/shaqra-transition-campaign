@@ -26,6 +26,7 @@ from flask import (Flask, Response, abort, g, redirect, render_template,
 DB_PATH = os.environ.get("DB_PATH", "/data/tickets.db")
 SITE_DIR = os.environ.get("SITE_DIR", "/srv/site")
 DATA_DIR = os.path.dirname(DB_PATH) or "."
+UPLOAD_DIR = os.path.abspath(os.path.join(DATA_DIR, "uploads"))
 ADMIN_USER = os.environ.get("ADMIN_USER", "")
 ADMIN_PASSWORD_HASH = os.environ.get("ADMIN_PASSWORD_HASH", "")  # salt_hex:hash_hex (scrypt)
 COOKIE_SECURE = os.environ.get("COOKIE_SECURE", "1") == "1"
@@ -41,12 +42,17 @@ JOB_CATEGORIES = [
     "طبيب", "تمريض", "صيدلة", "مختبر وأشعة وفنيون صحيون",
     "إداري", "خدمات مساندة", "تقنية معلومات", "أخرى",
 ]
-REQ_TYPES = {
-    "inquiry": "استفسار", "info_request": "طلب معلومات",
-    "complaint": "شكوى", "feedback": "ملاحظة", "suggestion": "اقتراح",
-}
-# أنواع يجوز تقديمها دون الإفصاح عن البيانات، وتُوجَّه مباشرة لقسم الشكاوى
-ANON_TYPES = ("complaint", "feedback", "suggestion")
+REQ_TYPES = {"request": "استفسار أو طلب", "feedback": "شكوى أو اقتراح أو ملاحظة"}
+# الأنواع القديمة (قبل الدمج) وروابط الصفحات التي ما زالت تستخدمها
+LEGACY_TYPES = {"inquiry": "request", "info_request": "request",
+                "complaint": "feedback", "suggestion": "feedback", "feedback": "feedback"}
+# نوع يجوز تقديمه دون الإفصاح عن البيانات، ويُوجَّه مباشرة لقسم الشكاوى
+ANON_TYPES = ("feedback",)
+FIRST_REF = 1001
+FOLLOW_CODE_LEN = 6
+MAX_PHOTOS = 3
+MAX_PHOTO_BYTES = 8 * 1024 * 1024
+PHOTO_MAX_SIDE = 2000
 STATUSES = {"new": "جديدة", "escalated": "محالة", "in_progress": "قيد المعالجة", "closed": "مغلقة"}
 OPEN_STATUSES = ("new", "escalated", "in_progress")
 ROLES = {"admin": "مشرف عام", "staff": "موظف قسم"}
@@ -68,14 +74,15 @@ GENERAL_TOPIC = "general"
 EMAIL_RE = re.compile(r"^[a-z0-9][a-z0-9._%+\-]{0,63}@moh\.gov\.sa$")
 MOBILE_RE = re.compile(r"^05\d{8}$")
 EMPNO_RE = re.compile(r"^\d{3,10}$")
-REF_RE = re.compile(r"^SHQ-\d{6}-[A-Z0-9]{5}$")
+REF_RE = re.compile(r"^(SHQ-\d{6}-[A-Z0-9]{5}|\d{1,7})$")  # old long refs stay valid
+TOKEN_RE = re.compile(r"^[A-Za-z0-9_-]{20,40}$")
 REF_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 USERNAME_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{2,31}$")
 AR_DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹", "01234567890123456789")
 
 app = Flask(__name__, static_folder=None, template_folder="templates")
 app.config.update(
-    MAX_CONTENT_LENGTH=32 * 1024,
+    MAX_CONTENT_LENGTH=(MAX_PHOTOS * MAX_PHOTO_BYTES) + 256 * 1024,
     SESSION_COOKIE_NAME="shq_s",
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SECURE=COOKIE_SECURE,
@@ -160,6 +167,16 @@ CREATE TABLE IF NOT EXISTS events(
   text TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS ix_e_ticket ON events(ticket_id);
+CREATE TABLE IF NOT EXISTS attachments(
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ticket_id INTEGER NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+  token TEXT NOT NULL UNIQUE,
+  source TEXT NOT NULL,
+  actor TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL,
+  size INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS ix_a_ticket ON attachments(ticket_id);
 """
 
 TICKET_NEW_COLS = [
@@ -183,6 +200,10 @@ def init_db():
         if name not in cols:
             con.execute("ALTER TABLE tickets ADD COLUMN %s %s" % (name, decl))
     con.execute("CREATE INDEX IF NOT EXISTS ix_t_dept ON tickets(dept_id)")
+    for old, new in LEGACY_TYPES.items():  # the five old request types became two
+        if old != new:
+            con.execute("UPDATE tickets SET req_type=? WHERE req_type=?", (new, old))
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
     if not con.execute("SELECT 1 FROM departments LIMIT 1").fetchone():
         for i, (k, ar, en, sla, sel) in enumerate(SEED_DEPTS):
             con.execute("INSERT INTO departments(key,name_ar,name_en,sla_days,selectable,sort) VALUES(?,?,?,?,?,?)",
@@ -445,6 +466,7 @@ def validate_ticket(form, lang="ar"):
     i = 0 if lang == "ar" else 1
     errors, v = {}, {}
     v["req_type"] = clean(form.get("req_type"), 20)
+    v["req_type"] = LEGACY_TYPES.get(v["req_type"], v["req_type"])
     if v["req_type"] not in REQ_TYPES:
         errors["req_type"] = ERR["req_type"][i]
     v["topic"] = clean(form.get("topic"), 40)
@@ -485,16 +507,88 @@ def validate_ticket(form, lang="ar"):
     return v, errors
 
 
+_ref_lock = threading.Lock()
+
+
 def new_ref(con):
-    stamp = datetime.now(RIYADH).strftime("%y%m%d")
-    for _ in range(20):
-        ref = "SHQ-%s-%s" % (stamp, "".join(secrets.choice(REF_ALPHABET) for _ in range(5)))
-        if not con.execute("SELECT 1 FROM tickets WHERE ref=?", (ref,)).fetchone():
-            return ref
-    raise RuntimeError("ref")
+    """Short sequential ticket number (1001, 1002, ...). Call while holding _ref_lock."""
+    last = con.execute("SELECT MAX(CAST(ref AS INTEGER)) FROM tickets WHERE ref NOT LIKE 'SHQ-%'").fetchone()[0]
+    return str(max(FIRST_REF - 1, last or 0) + 1)
 
 
-ERR_ORDER = ["req_type", "topic", "message", "name", "emp_no", "facility", "job_cat", "email", "mobile", "consent"]
+def norm_ref(s):
+    return (s or "").translate(AR_DIGITS).replace("#", "").replace(" ", "").upper()
+
+
+# ---------------------------------------------------------------- photos
+from PIL import Image, ImageOps  # noqa: E402
+
+try:
+    from pillow_heif import register_heif_opener
+    register_heif_opener()
+except Exception:  # HEIC support is optional
+    pass
+Image.MAX_IMAGE_PIXELS = 50_000_000
+
+
+def read_photos(files):
+    """Re-encode uploaded images as clean JPEGs (no EXIF/location, no hidden payload).
+    Returns (list of jpeg bytes, error_key or None)."""
+    out = []
+    files = [f for f in files if f and f.filename]
+    if len(files) > MAX_PHOTOS:
+        return [], "photos_count"
+    for f in files:
+        data = f.read(MAX_PHOTO_BYTES + 1)
+        if len(data) > MAX_PHOTO_BYTES:
+            return [], "photos_size"
+        try:
+            im = Image.open(io.BytesIO(data))
+            if im.format not in ("JPEG", "PNG", "WEBP", "HEIF", "GIF", "MPO"):
+                return [], "photos_type"
+            im.seek(0)
+            im.load()
+            im = ImageOps.exif_transpose(im)
+            if im.mode in ("RGBA", "LA", "P"):
+                im = im.convert("RGBA")
+                bg = Image.new("RGB", im.size, (255, 255, 255))
+                bg.paste(im, mask=im.split()[-1])
+                im = bg
+            elif im.mode != "RGB":
+                im = im.convert("RGB")
+            im.thumbnail((PHOTO_MAX_SIDE, PHOTO_MAX_SIDE))
+            buf = io.BytesIO()
+            im.save(buf, "JPEG", quality=85, optimize=True)
+            out.append(buf.getvalue())
+        except Exception:
+            return [], "photos_type"
+    return out, None
+
+
+def store_photos(con, ticket_id, photos, source, actor=""):
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
+    for data in photos:
+        tok = secrets.token_urlsafe(18)
+        with open(os.path.join(UPLOAD_DIR, tok + ".jpg"), "wb") as fh:
+            fh.write(data)
+        con.execute("INSERT INTO attachments(ticket_id,token,source,actor,created_at,size) VALUES(?,?,?,?,?,?)",
+                    (ticket_id, tok, source, actor, now_utc(), len(data)))
+
+
+def delete_photos(con, ticket_id):
+    for (tok,) in con.execute("SELECT token FROM attachments WHERE ticket_id=?", (ticket_id,)).fetchall():
+        try:
+            os.remove(os.path.join(UPLOAD_DIR, tok + ".jpg"))
+        except OSError:
+            pass
+    con.execute("DELETE FROM attachments WHERE ticket_id=?", (ticket_id,))
+
+
+def send_photo(tok):
+    return send_from_directory(UPLOAD_DIR, tok + ".jpg", mimetype="image/jpeg", max_age=0)
+
+
+ERR_ORDER = ["req_type", "topic", "message", "photos", "name", "emp_no", "facility", "job_cat", "email", "mobile", "consent"]
 
 
 # ---------------------------------------------------------------- public pages
@@ -512,6 +606,11 @@ def ticket_form():
         if request.form.get("website"):  # honeypot
             return redirect(pre + "/ticket/done")
         values, errors = validate_ticket(request.form, lang)
+        photos, perr = read_photos(request.files.getlist("photos"))
+        if perr:
+            errors["photos"] = ERR[perr][0 if lang == "ar" else 1]
+        elif photos and errors:
+            errors["photos"] = ERR["photos_again"][0 if lang == "ar" else 1]
         if not errors:
             con = db()
             if values["anonymous"]:
@@ -527,27 +626,29 @@ def ticket_form():
             dept = dept_by_key(COMPLAINTS_KEY) if values["req_type"] in ANON_TYPES else None
             if not dept or not dept["active"]:
                 dept = dept_by_key(INTAKE_KEY)
-            ref = new_ref(con)
-            ts = now_utc()
-            code, fh = "", ""
-            if values["anonymous"]:
-                code = "".join(secrets.choice(REF_ALPHABET) for _ in range(8))
-                fh = follow_hash(ref, code)
-            cur = con.execute(
-                "INSERT INTO tickets(ref,created_at,updated_at,email,mobile,emp_no,name,facility,job_cat,req_type,"
-                "message,lang,topic,dept_id,anonymous,follow_hash,due_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                (ref, ts, ts, values["email"], values["mobile"], values["emp_no"], values["name"],
-                 values["facility"], values["job_cat"], values["req_type"], values["message"], lang,
-                 values["topic"], dept["id"], 1 if values["anonymous"] else 0, fh,
-                 add_workdays(ts, dept["sla_days"])))
-            log_event(con, cur.lastrowid, "الموظف" if not values["anonymous"] else "مقدّم مجهول", "create",
-                      to_dept=dept["id"])
-            con.commit()
+            with _ref_lock:
+                ref = new_ref(con)
+                ts = now_utc()
+                code, fh = "", ""
+                if values["anonymous"]:
+                    code = "".join(secrets.choice(REF_ALPHABET) for _ in range(FOLLOW_CODE_LEN))
+                    fh = follow_hash(ref, code)
+                cur = con.execute(
+                    "INSERT INTO tickets(ref,created_at,updated_at,email,mobile,emp_no,name,facility,job_cat,req_type,"
+                    "message,lang,topic,dept_id,anonymous,follow_hash,due_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    (ref, ts, ts, values["email"], values["mobile"], values["emp_no"], values["name"],
+                     values["facility"], values["job_cat"], values["req_type"], values["message"], lang,
+                     values["topic"], dept["id"], 1 if values["anonymous"] else 0, fh,
+                     add_workdays(ts, dept["sla_days"])))
+                store_photos(con, cur.lastrowid, photos, "employee")
+                log_event(con, cur.lastrowid, "الموظف" if not values["anonymous"] else "مقدّم مجهول", "create",
+                          "%d صورة مرفقة" % len(photos) if photos else "", to_dept=dept["id"])
+                con.commit()
             session["done_ref"] = ref
             session["done_code"] = code
             return redirect(pre + "/ticket/done")
     else:
-        t = request.args.get("type", "")
+        t = LEGACY_TYPES.get(request.args.get("type", ""), request.args.get("type", ""))
         if t in REQ_TYPES:
             values["req_type"] = t
         tp = request.args.get("topic", "")
@@ -558,14 +659,14 @@ def ticket_form():
             values["message"] = qpre
     i = 0 if lang == "ar" else 1
     first_bad = next((f for f in ERR_ORDER if f in errors), "")
-    start = 1 if first_bad in ("", "req_type", "topic", "message") else (
+    start = 1 if first_bad in ("", "req_type", "topic", "message", "photos") else (
         2 if first_bad in ("name", "emp_no", "facility", "job_cat") else 3)
     return render_template(
         "ticket_form.html", v=values, errors=errors, start=start,
         facilities=[(k, ar if lang == "ar" else en) for k, ar, en in FACILITY_OPTS],
         jobs=[(k, ar if lang == "ar" else en) for k, ar, en in JOB_OPTS],
         types=[(k, TYPES_I18N[k][i], TYPE_HELP[k][i]) for k in REQ_TYPES],
-        anon_types=ANON_TYPES, topics=topic_opts(lang),
+        anon_types=ANON_TYPES, topics=topic_opts(lang), max_photos=MAX_PHOTOS,
         err_msgs={k: ERR[k][i] for k in ERR}, err_order=ERR_ORDER,
     ), (400 if errors else 200)
 
@@ -583,37 +684,53 @@ def ticket_done():
 def status_lookup():
     lang = g.lang
     i = 0 if lang == "ar" else 1
-    result, error, dept_name = None, None, ""
+    result, error, dept_name, photos = None, None, "", []
     if request.method == "POST":
         check_csrf()
         ip = client_ip()
         if rate_hit("sl:" + ip, 30, 600):
             abort(429)
-        ref = clean(request.form.get("ref"), 30).upper()
+        ref = norm_ref(clean(request.form.get("ref"), 30))
         key = clean(request.form.get("email"), 120)
         row = None
         if REF_RE.match(ref):
-            cols = "SELECT ref,created_at,updated_at,req_type,status,reply,dept_id,anonymous FROM tickets "
+            cols = "SELECT id,ref,created_at,updated_at,req_type,status,reply,dept_id,anonymous FROM tickets "
             if "@" in key:
                 if EMAIL_RE.match(key.lower()):
                     row = db().execute(cols + "WHERE ref=? AND email=? AND anonymous=0",
                                        (ref, key.lower())).fetchone()
             else:
                 code = norm_code(key)
-                if len(code) == 8:
+                if len(code) in (FOLLOW_CODE_LEN, 8):
                     row = db().execute(cols + "WHERE ref=? AND anonymous=1 AND follow_hash=?",
                                        (ref, follow_hash(ref, code))).fetchone()
         if row:
             result = row
+            ok_ids = [x for x in session.get("st_ok", []) if x != row["id"]][-9:] + [row["id"]]
+            session["st_ok"] = ok_ids
+            photos = db().execute("SELECT token, source FROM attachments WHERE ticket_id=? ORDER BY id",
+                                  (row["id"],)).fetchall()
             d = dept_by_id(row["dept_id"])
             if d:
                 dept_name = d["name_ar"] if lang == "ar" else d["name_en"]
         else:
             time.sleep(0.4)
             error = T[lang]["st_notfound"]
-    return render_template("status.html", result=result, error=error, dept_name=dept_name,
+    return render_template("status.html", result=result, error=error, dept_name=dept_name, photos=photos,
                            statuses={k: v[i] for k, v in STATUSES_I18N.items()},
                            types={k: v[i] for k, v in TYPES_I18N.items()})
+
+
+@app.route("/status/f/<tok>")
+@app.route("/en/status/f/<tok>")
+def status_photo(tok):
+    """Photos of a ticket the visitor has just opened on the follow-up page (same session)."""
+    if not TOKEN_RE.match(tok):
+        abort(404)
+    r = db().execute("SELECT ticket_id FROM attachments WHERE token=?", (tok,)).fetchone()
+    if not r or r[0] not in session.get("st_ok", []):
+        abort(404)
+    return send_photo(tok)
 
 
 @app.route("/app-static/<path:name>")
@@ -857,7 +974,8 @@ def admin_list():
 
 # ---------------------------------------------------------------- one ticket
 EVENT_KINDS = {"create": "تقديم التذكرة", "status": "تغيير الحالة", "reply": "رد على الموظف",
-               "note": "ملاحظة داخلية", "escalate": "تصعيد / إحالة", "topic": "تعديل التصنيف"}
+               "note": "ملاحظة داخلية", "escalate": "تصعيد / إحالة", "topic": "تعديل التصنيف",
+               "photo": "إرفاق صور"}
 
 
 def _load_ticket(ref, u):
@@ -886,6 +1004,10 @@ def admin_ticket(ref):
             if st not in STATUSES:
                 abort(400)
             reply = clean(request.form.get("reply"), 3000)
+            photos, perr = read_photos(request.files.getlist("photos"))
+            if perr:
+                err = ERR[perr][0]
+                return _render_ticket(row, u, err)
             sets, vals = ["updated_at=?"], [ts]
             if st != row["status"]:
                 sets.append("status=?"); vals.append(st)
@@ -899,6 +1021,9 @@ def admin_ticket(ref):
             if reply != row["reply"]:
                 sets.append("reply=?"); vals.append(reply)
                 log_event(con, row["id"], actor, "reply", reply)
+            if photos:
+                store_photos(con, row["id"], photos, "staff", actor)
+                log_event(con, row["id"], actor, "photo", "%d صورة مرفقة مع الرد (يراها الموظف)" % len(photos))
             con.execute("UPDATE tickets SET " + ", ".join(sets) + " WHERE id=?", vals + [row["id"]])
             con.commit()
             return redirect(url_for("admin_ticket", ref=ref, saved=1))
@@ -937,14 +1062,33 @@ def admin_ticket(ref):
             return redirect(url_for("admin_ticket", ref=ref, saved=1))
         else:
             abort(400)
+    return _render_ticket(row, u, err)
+
+
+def _render_ticket(row, u, err=None):
+    con = db()
     depts = all_depts()
     dnames = {d["id"]: d["name_ar"] for d in depts}
     events = con.execute("SELECT * FROM events WHERE ticket_id=? ORDER BY id", (row["id"],)).fetchall()
+    photos = con.execute("SELECT * FROM attachments WHERE ticket_id=? ORDER BY id", (row["id"],)).fetchall()
     return render_template("admin_ticket.html", tk=row, statuses=STATUSES, types=REQ_TYPES,
                            saved=request.args.get("saved") == "1", err=err, events=events, kinds=EVENT_KINDS,
                            dept_names=dnames, depts=[d for d in depts if d["active"] and d["id"] != row["dept_id"]],
-                           topic_names=_topic_names(), now=now_utc(),
+                           topic_names=_topic_names(), now=now_utc(), photos=photos, max_photos=MAX_PHOTOS,
                            can_delete=is_admin_user(u))
+
+
+@app.route("/admin/f/<tok>")
+@login_required
+def admin_photo(tok):
+    if not TOKEN_RE.match(tok):
+        abort(404)
+    r = db().execute("SELECT t.ref FROM attachments a JOIN tickets t ON t.id=a.ticket_id WHERE a.token=?",
+                     (tok,)).fetchone()
+    if not r:
+        abort(404)
+    _load_ticket(r[0], current_user())  # 404 unless this user may see the ticket
+    return send_photo(tok)
 
 
 @app.route("/admin/t/<ref>/delete", methods=["POST"])
@@ -954,6 +1098,9 @@ def admin_delete(ref):
     if not REF_RE.match(ref):
         abort(404)
     con = db()
+    r = con.execute("SELECT id FROM tickets WHERE ref=?", (ref,)).fetchone()
+    if r:
+        delete_photos(con, r[0])
     con.execute("DELETE FROM events WHERE ticket_id=(SELECT id FROM tickets WHERE ref=?)", (ref,))
     con.execute("DELETE FROM tickets WHERE ref=?", (ref,))
     con.commit()

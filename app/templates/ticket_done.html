@@ -10,7 +10,7 @@
     <p><span class="ref">{{ ref }}</span></p>
     {% if code %}
     <p>{{ t.dn_code }}</p>
-    <p><span class="ref">{{ code[:4] }}-{{ code[4:] }}</span></p>
+    <p><span class="ref">{{ code[:3] }}-{{ code[3:] }}</span></p>
     <p>{{ t.dn_code_keep|safe }}</p>
     {% else %}
     <p>{{ t.dn_keep|safe }}</p>

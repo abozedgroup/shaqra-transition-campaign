@@ -32,15 +32,21 @@
           <dt>آخر تحديث</dt><dd>{{ tk.updated_at|dt }}</dd>
         </dl>
         <h3>نص الطلب</h3><pre class="msgbox">{{ tk.message }}</pre>
+        {% set emp_ph = photos|selectattr('source','equalto','employee')|list %}
+        {% if emp_ph %}<h3>صور أرفقها الموظف</h3><div class="photos">{% for ph in emp_ph %}<a href="/admin/f/{{ ph.token }}" target="_blank" rel="noopener"><img src="/admin/f/{{ ph.token }}" alt="صورة {{ loop.index }}" loading="lazy"></a>{% endfor %}</div>{% endif %}
       </div>
 
-      <form class="panel" method="post" action="/admin/t/{{ tk.ref }}">
+      <form class="panel" method="post" action="/admin/t/{{ tk.ref }}" enctype="multipart/form-data">
         <h3>الحالة والرد</h3>
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="update">
         <div class="field"><label for="status">الحالة</label>
           <select id="status" name="status">{% for k,l in statuses.items() %}<option value="{{k}}" {% if tk.status==k %}selected{% endif %}>{{l}}</option>{% endfor %}</select></div>
         <div class="field"><label for="reply">الرد على الموظف <span class="opt">(يظهر له في صفحة المتابعة)</span></label>
           <textarea id="reply" name="reply" maxlength="3000">{{ tk.reply }}</textarea></div>
+        {% set st_ph = photos|selectattr('source','equalto','staff')|list %}
+        {% if st_ph %}<p class="hint">صور مرفقة مع الرد (يراها الموظف):</p><div class="photos">{% for ph in st_ph %}<a href="/admin/f/{{ ph.token }}" target="_blank" rel="noopener"><img src="/admin/f/{{ ph.token }}" alt="مرفق الرد {{ loop.index }}" loading="lazy"></a>{% endfor %}</div>{% endif %}
+        <div class="field"><label for="rphotos">إرفاق صور مع الرد <span class="opt">(اختياري، حتى {{ max_photos }} صور في كل مرة، يراها الموظف في صفحة المتابعة)</span></label>
+          <input type="file" id="rphotos" name="photos" accept="image/*" multiple></div>
         <button class="btn solid" type="submit">حفظ</button>
       </form>
     </div>

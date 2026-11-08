@@ -22,18 +22,14 @@ JOB_OPTS = [
     ("other", "أخرى", "Other"),
 ]
 TYPES = {
-    "inquiry": ("استفسار", "Inquiry"),
-    "info_request": ("طلب معلومات", "Information request"),
-    "complaint": ("شكوى", "Complaint"),
-    "feedback": ("ملاحظة", "Feedback"),
-    "suggestion": ("اقتراح", "Suggestion"),
+    "request": ("استفسار أو طلب", "Question or request"),
+    "feedback": ("شكوى أو اقتراح أو ملاحظة", "Complaint, suggestion or feedback"),
 }
 TYPE_HELP = {
-    "inquiry": ("سؤال عن إجراء أو حالتك", "A question about a procedure or your case"),
-    "complaint": ("ملاحظة تحتاج متابعة", "A problem that needs follow-up"),
-    "suggestion": ("فكرة للتحسين", "An idea to improve things"),
-    "info_request": ("طلب بيان أو معلومة", "Request for a statement or information"),
-    "feedback": ("رأي أو ملاحظة على العمل", "An observation about work"),
+    "request": ("سؤال عن إجراء أو حالتك، أو طلب بيان أو معلومة. بياناتك مطلوبة لنرد عليك.",
+                "A question about a procedure or your case, or a request for a document or information. Your details are needed so we can reply."),
+    "feedback": ("ملاحظة على العمل أو فكرة للتحسين أو شكوى. بياناتك اختيارية.",
+                 "An observation, an idea to improve things, or a complaint. Your details are optional."),
 }
 STATUSES = {
     "new": ("جديدة", "New"),
@@ -54,6 +50,10 @@ ERR = {
     "req_type": ("اختر نوع الطلب.", "Choose the type of request."),
     "message": ("اكتب طلبك (10 أحرف على الأقل).", "Write your request (at least 10 characters)."),
     "topic": ("اختر موضوع طلبك.", "Choose what your request is about."),
+    "photos_count": ("يمكن إرفاق 3 صور كحد أقصى.", "You can attach up to 3 photos."),
+    "photos_size": ("حجم الصورة يجب ألا يتجاوز 8 ميجابايت.", "Each photo must be 8 MB or smaller."),
+    "photos_type": ("الملف المرفق ليس صورة صالحة. أرفق صورة JPG أو PNG أو HEIC.", "The attached file is not a valid photo. Attach a JPG, PNG or HEIC photo."),
+    "photos_again": ("صحّح الحقول المطلوبة ثم أرفق الصور مرة أخرى؛ لم تُحفظ.", "Fix the fields above, then attach the photos again; they were not saved."),
     "consent": ("ضع علامة الموافقة على إشعار الخصوصية للمتابعة.", "Tick the box to agree to the privacy notice."),
 }
 
@@ -66,6 +66,8 @@ T = {
   fnote="دليل توعوي لموظفي نطاق شقراء الصحي. المرجع الرسمي هو الصحة القابضة والجهات المختصة.",
   lbl_topic="موضوع الطلب", hint_topic="اختر الأقرب لموضوعك ليصل إلى القسم المختص أسرع. إن لم تجده اختر «موضوع عام / أخرى».",
   topic_general="موضوع عام / أخرى",
+  lbl_photos="إرفاق صور", photos_opt="(اختياري، حتى 3 صور)", hint_photos="صورة من الجوال أو لقطة شاشة، حتى 8 ميجابايت لكل صورة. تُحذف منها بيانات الموقع والجهاز تلقائيًا. لا ترفق صور هوية أو بيانات بنكية.",
+  st_photos="صور مرفقة من القسم:", st_my_photos="صورك المرفقة:",
   anon_lbl="لا أريد الإفصاح عن بياناتي",
   anon_hint="لن نطلب اسمك أو رقمك الوظيفي أو بريدك أو جوالك، ولن يعرف أحد هويتك. لن نستطيع التواصل معك، وستتابع الرد برقم التذكرة ورمز متابعة سري يظهر لك بعد الإرسال.",
   anon_on="اخترت عدم الإفصاح عن بياناتك. لا حاجة لتعبئة هذه الخطوة؛ المنشأة اختيارية.",
@@ -99,7 +101,7 @@ T = {
   st_status="الحالة:", st_type="نوع الطلب:", st_created="تاريخ التقديم:", st_updated="آخر تحديث:", st_tz="(توقيت الرياض)",
   st_reply="الرد على طلبك:", st_noreply="لم يصل رد بعد. سيظهر هنا عند إضافته.", st_ticket="تذكرة",
   st_notfound="لا توجد تذكرة مطابقة. تأكد من رقم التذكرة والبريد الوزاري أو رمز المتابعة.",
-  st_where="رقم التذكرة يظهر لك بعد الإرسال، بصيغة SHQ-XXXXXX-XXXXX.",
+  st_where="رقم التذكرة يظهر لك بعد الإرسال، مثل 1024.",
   new_ticket="إنشاء طلب جديد", contact_guide="دليل التواصل مع العناية بالموظفين",
   # messages
   e400=("طلب غير صالح", "انتهت صلاحية الصفحة أو الطلب غير صالح. ارجع للصفحة السابقة وحدّثها ثم أعد المحاولة."),
@@ -117,6 +119,8 @@ T = {
   fnote="An awareness guide for Shaqra Health Cluster staff. The official references are Health Holding and the responsible authorities.",
   lbl_topic="Topic", hint_topic="Choose the closest topic so your request reaches the right section faster. If none fits, choose \u201cGeneral / other\u201d.",
   topic_general="General / other",
+  lbl_photos="Attach photos", photos_opt="(optional, up to 3)", hint_photos="A phone photo or screenshot, up to 8 MB each. Location and device data are removed automatically. Do not attach ID cards or bank details.",
+  st_photos="Photos attached by the section:", st_my_photos="Your attached photos:",
   anon_lbl="I do not want to share my details",
   anon_hint="We will not ask for your name, employee number, email or mobile, and nobody will know who you are. We will not be able to contact you; you follow the reply with your ticket number and a secret follow-up code shown after you send.",
   anon_on="You chose not to share your details. You do not need to fill in this step; the facility is optional.",
@@ -147,7 +151,7 @@ T = {
   st_status="Status:", st_type="Request type:", st_created="Sent on:", st_updated="Last update:", st_tz="(Riyadh time)",
   st_reply="Reply to your request:", st_noreply="No reply yet. It will appear here when added.", st_ticket="Ticket",
   st_notfound="No matching ticket. Check the ticket number and the ministry email or follow-up code.",
-  st_where="Your ticket number is shown after you send the request, like SHQ-XXXXXX-XXXXX.",
+  st_where="Your ticket number is shown after you send the request, like 1024.",
   new_ticket="Create a new request", contact_guide="How to contact the Employee Care Department",
   e400=("Invalid request", "The page expired or the request is not valid. Go back, refresh the page and try again."),
   e404=("Page not found", "We could not find the page you asked for."),
