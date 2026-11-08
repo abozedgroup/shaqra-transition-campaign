@@ -39,7 +39,7 @@ ok(len(q("SELECT id FROM appointments")) == 1, "no appointment for anonymous fee
 
 # 2. the section books a slot
 r, h = get(a, "/admin/t/%s?appt_day=%s" % (ref, (d0 + timedelta(days=1)).date().isoformat()))
-ok("حجز موعد حضوري" in h or "إعادة جدولة" in h, "ticket page shows booking panel")
+ok("احجز موعدًا حضوريًا" in h and "ماذا تريد أن تفعل؟" in h and "الخطوة التالية" in h, "ticket page shows action tabs and booking")
 slots = re.findall(r'name="slot" value="([^"]+)"', h); ok(slots and slots[0].endswith("07:30"), "slots start 07:30 next day: %s" % slots[:2])
 ok(len(slots) == 21, "7:30-14:30 every 20 min = 21 slots (%d)" % len(slots))
 a.post("/admin/t/%s/appt" % ref, data=dict(csrf_token=tok(h), action="book", slot=slots[3], staff_note="أحضر صورة الهوية"))

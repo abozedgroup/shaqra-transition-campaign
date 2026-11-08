@@ -1,57 +1,53 @@
-{# appointment panel on the staff ticket page #}
-{% if not tk.anonymous and appt_dept %}
-<div class="panel appt-panel" id="appt">
-  <h3>موعد حضوري</h3>
-  {% if appt_err %}<div class="warn" role="alert">{{ appt_err }}</div>{% endif %}
-  {% if appt_done %}<div class="okmsg">انتهت الخدمة الحضورية. اكتب الرد ثم «إنهاء وإرسال الرد للتقييم».</div>{% endif %}
-  {% set live = appt and appt.status not in ('done','no_show','cancelled') %}
-  {% if appt %}
-    <p><span class="badge ap-{{ appt.status }}">{{ appt_statuses.get(appt.status, appt.status) }}</span>
-      {% if appt.kind == 'walkin' %} <span class="badge ch-walkin">حضوري بدون موعد</span>{% endif %}</p>
-    {% if appt.slot and appt.kind == 'appointment' %}<p><b>الموعد:</b> {{ appt.slot|slot }}</p>{% endif %}
-    {% if appt.emp_note %}<p><b>ملاحظة الموظف:</b> {{ appt.emp_note }}</p>{% endif %}
-    {% if appt.staff_note %}<p><b>تعليماتكم له:</b> {{ appt.staff_note }}</p>{% endif %}
-    {% if appt_mail %}
-    <div class="notify">
-      <a class="btn solid" href="{{ appt_mail }}" data-notify="/admin/t/{{ tk.ref }}/appt">✉ إبلاغه بالموعد عبر البريد</a>
-      <span class="hint">يفتح برنامج البريد لديك (Outlook) برسالة جاهزة إلى <span dir="ltr">{{ tk.email }}</span>؛ راجعها ثم اضغط «إرسال».</span>
-    </div>
-    {% endif %}
-    {% if live %}
-    <form method="post" action="/admin/t/{{ tk.ref }}/appt" class="actions">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      {% if appt.status in ('booked','confirmed','change_requested') %}<button class="btn" name="action" value="checkin">تسجيل حضوره</button>{% endif %}
-      {% if appt.status in ('checked_in','booked','confirmed') %}<button class="btn solid" name="action" value="call">استدعاء وبدء الخدمة</button>{% endif %}
-      {% if appt.status == 'serving' %}<button class="btn solid" name="action" value="done">إنهاء الخدمة الحضورية</button>{% endif %}
-      {% if appt.status in ('booked','confirmed','change_requested','checked_in') %}<button class="btn" name="action" value="noshow">لم يحضر</button>{% endif %}
-      <button class="btn danger" name="action" value="cancel">إلغاء الموعد</button>
-    </form>
-    {% endif %}
+{# appointment tab content on the staff ticket page (no outer card) #}
+{% if appt_err %}<div class="warn" role="alert">{{ appt_err }}</div>{% endif %}
+{% if appt_done %}<div class="okmsg">انتهت الخدمة الحضورية. اكتب الرد في تبويب «الرد على الموظف» ثم «إنهاء وإرسال الرد للتقييم».</div>{% endif %}
+{% set live = appt and appt.status not in ('done','no_show','cancelled') %}
+{% if appt %}
+<div class="appt-now">
+  <div class="appt-now-head"><span class="badge ap-{{ appt.status }}">{{ appt_statuses.get(appt.status, appt.status) }}</span>
+    {% if appt.kind == 'walkin' %}<span class="badge ch-walkin">حضوري بدون موعد</span>{% endif %}</div>
+  {% if appt.slot and appt.kind == 'appointment' %}<p class="appt-when">{{ appt.slot|slot }}</p>{% endif %}
+  {% if appt.emp_note %}<p><b>رغبة الموظف:</b> {{ appt.emp_note }}</p>{% endif %}
+  {% if appt.staff_note %}<p><b>تعليماتكم له:</b> {{ appt.staff_note }}</p>{% endif %}
+  {% if appt_mail %}
+  <div class="notify">
+    <a class="btn solid" href="{{ appt_mail }}" data-notify="/admin/t/{{ tk.ref }}/appt">✉ إبلاغه بالموعد عبر البريد</a>
+    <span class="hint">يفتح برنامج البريد لديك برسالة جاهزة إلى <span dir="ltr">{{ tk.email }}</span>؛ راجعها ثم اضغط «إرسال».</span>
+  </div>
   {% endif %}
-  {% if tk.status in open_statuses and (not live or appt.status in ('requested','booked','confirmed','change_requested')) %}
-    {% if appt_cfg and not appt_cfg.enabled %}<p class="hint">المواعيد موقوفة لهذا القسم.</p>{% else %}
-    <details {% if appt and appt.status in ('requested','change_requested') %}open{% endif %}>
-      <summary><b>{{ 'إعادة جدولة الموعد' if live and appt.slot else 'حجز موعد حضوري للموظف' }}</b></summary>
-      <form method="get" action="/admin/t/{{ tk.ref }}#appt" class="inline-form appt-day">
-        <div class="field"><label for="appt_day">اليوم</label>
-          <select id="appt_day" name="appt_day" data-autosubmit>{% for dd, lbl, free in appt_days %}<option value="{{ dd }}" {% if dd==appt_day %}selected{% endif %} {% if not free %}disabled{% endif %}>{{ lbl }}{% if free %} ({{ free }} متاح){% else %} – لا يوجد وقت متاح{% endif %}</option>{% endfor %}</select></div>
-        <noscript><button class="btn" type="submit">عرض الأوقات</button></noscript>
-      </form>
-      <form method="post" action="/admin/t/{{ tk.ref }}/appt">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="book">
-        {% set free_slots = appt_slots|selectattr(1, 'gt', 0)|list %}
-        {% if free_slots %}
-        <div class="slots" role="radiogroup" aria-label="الوقت">
-          {% for s, free in appt_slots %}<label class="{{ 'full' if free <= 0 }}"><input type="radio" name="slot" value="{{ s }}" {% if free <= 0 %}disabled{% endif %} required> <span>{{ s|slot_time }}</span></label>{% endfor %}
-        </div>
-        <div class="field"><label for="staff_note">تعليمات للموظف <span class="opt">(اختياري: المكان، ما يُحضره…)</span></label>
-          <input type="text" id="staff_note" name="staff_note" maxlength="500" value="{{ appt.staff_note if appt else '' }}" placeholder="{{ appt_cfg.location }}"></div>
-        <button class="btn solid" type="submit">حجز الموعد</button>
-        <p class="hint">يظهر الموعد للموظف في صفحة «متابعة طلبي» ليؤكده. لا تصله رسالة تلقائيًا؛ اتصل به إن كان الموعد قريبًا: <span dir="ltr">{{ tk.mobile }}</span></p>
-        {% else %}<p class="hint">لا توجد أوقات متاحة في هذا اليوم.</p>{% endif %}
-      </form>
-    </details>
-    {% endif %}
+  {% if live %}
+  <form method="post" action="/admin/t/{{ tk.ref }}/appt" class="actions">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {% if appt.status in ('checked_in','booked','confirmed') %}<button class="btn solid" name="action" value="call">استدعاء وبدء الخدمة</button>{% endif %}
+    {% if appt.status == 'serving' %}<button class="btn solid" name="action" value="done">إنهاء الخدمة الحضورية</button>{% endif %}
+    {% if appt.status in ('booked','confirmed','change_requested') %}<button class="btn" name="action" value="checkin">تسجيل حضوره</button>{% endif %}
+    {% if appt.status in ('booked','confirmed','change_requested','checked_in') %}<button class="btn" name="action" value="noshow">لم يحضر</button>{% endif %}
+    <button class="btn danger" name="action" value="cancel">إلغاء الموعد</button>
+  </form>
   {% endif %}
 </div>
+{% endif %}
+{% if tk.status in open_statuses and (not live or appt.status in ('requested','booked','confirmed','change_requested')) %}
+  {% if appt_cfg and not appt_cfg.enabled %}<p class="hint">المواعيد موقوفة لهذا القسم.</p>{% else %}
+  <h4 class="sub-h">{{ 'إعادة جدولة الموعد' if live and appt.slot else 'احجز موعدًا حضوريًا' }}</h4>
+  <form method="get" action="/admin/t/{{ tk.ref }}#act" class="appt-day">
+    <div class="field"><label for="appt_day">١. اختر اليوم</label>
+      <select id="appt_day" name="appt_day" data-autosubmit>{% for dd, lbl, free in appt_days %}<option value="{{ dd }}" {% if dd==appt_day %}selected{% endif %} {% if not free %}disabled{% endif %}>{{ lbl }}{% if free %} ({{ free }} متاح){% else %} – لا يوجد وقت متاح{% endif %}</option>{% endfor %}</select></div>
+    <noscript><button class="btn" type="submit">عرض الأوقات</button></noscript>
+  </form>
+  <form method="post" action="/admin/t/{{ tk.ref }}/appt">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="book">
+    {% set free_slots = appt_slots|selectattr(1, 'gt', 0)|list %}
+    {% if free_slots %}
+    <span class="legend">٢. اختر الوقت</span>
+    <div class="slots" role="radiogroup" aria-label="الوقت">
+      {% for s, free in appt_slots %}<label class="{{ 'full' if free <= 0 }}"><input type="radio" name="slot" value="{{ s }}" {% if free <= 0 %}disabled{% endif %} required> <span>{{ s|slot_time }}</span></label>{% endfor %}
+    </div>
+    <div class="field"><label for="staff_note">٣. تعليمات للموظف <span class="opt">(اختياري: المكان، ما يُحضره…)</span></label>
+      <input type="text" id="staff_note" name="staff_note" maxlength="500" value="{{ appt.staff_note if appt else '' }}" placeholder="{{ appt_cfg.location }}"></div>
+    <button class="btn solid" type="submit">حجز الموعد</button>
+    <p class="hint">بعد الحجز يظهر زر لإبلاغه بالبريد، ويرى الموعد في صفحة «متابعة طلبي» ليؤكده.</p>
+    {% else %}<p class="hint">لا توجد أوقات متاحة في هذا اليوم. اختر يومًا آخر.</p>{% endif %}
+  </form>
+  {% endif %}
 {% endif %}

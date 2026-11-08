@@ -39,4 +39,32 @@
       }, 300);
     });
   });
+  // action tabs on the ticket page (without JS every pane stays visible, one under the other)
+  var tabs = [].slice.call(document.querySelectorAll('[role=tab]'));
+  if (tabs.length) {
+    var show = function (tab, focus) {
+      tabs.forEach(function (t) {
+        var on = t === tab, pane = document.getElementById(t.getAttribute('aria-controls'));
+        t.setAttribute('aria-selected', on ? 'true' : 'false');
+        t.tabIndex = on ? 0 : -1;
+        if (pane) pane.hidden = !on;
+      });
+      if (focus) tab.focus();
+    };
+    tabs.forEach(function (t, i) {
+      t.addEventListener('click', function () { show(t, false); });
+      t.addEventListener('keydown', function (e) {
+        var k = e.key, n = null;
+        if (k === 'ArrowLeft') n = tabs[(i + 1) % tabs.length];       // RTL: left = next
+        if (k === 'ArrowRight') n = tabs[(i - 1 + tabs.length) % tabs.length];
+        if (k === 'Home') n = tabs[0];
+        if (k === 'End') n = tabs[tabs.length - 1];
+        if (n) { e.preventDefault(); show(n, true); }
+      });
+    });
+    var first = tabs.filter(function (t) { return t.getAttribute('aria-selected') === 'true'; })[0] || tabs[0];
+    if (location.hash === '#appt' && document.getElementById('tab-appt')) first = document.getElementById('tab-appt');
+    show(first, false);
+    if (location.hash === '#appt') { var act = document.getElementById('act'); if (act) act.scrollIntoView(); }
+  }
 })();

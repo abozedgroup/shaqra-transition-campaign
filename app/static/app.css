@@ -177,3 +177,71 @@ div.kpi{cursor:default}
 .k-choice.appt{background:#eef8f4;border-color:#a7dcc9}
 .k-offer{margin:18px 0 6px;padding-top:16px;border-top:1px solid var(--line)}
 .notify{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;margin:8px 0 12px;padding:10px 12px;background:#f3f8fe;border:1px solid #cfe0f5;border-radius:12px}
+
+/* ---------- ticket page layout ---------- */
+.tk-page .back{margin:0 0 10px}
+.tk-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:10px 24px;padding:14px 18px;background:#fff;border:1px solid var(--line);border-radius:14px}
+.tk-title{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.tk-title h1{margin:0;font-size:26px;color:var(--navy)}
+.tk-meta{display:flex;flex-wrap:wrap;gap:6px 22px;font-size:15px}
+.tk-meta b{color:var(--muted);font-weight:700}
+.next-step{margin:12px 0 18px;padding:12px 16px;border-radius:12px;border:1px solid #cfe0f5;background:#f3f8fe;border-inline-start:5px solid #2a78d6;font-size:16px}
+.next-step.ns-resolved{border-color:#e0d0f5;background:#f8f4fe;border-inline-start-color:#7a4cc2}
+.next-step.ns-closed{border-color:var(--line);background:var(--soft);border-inline-start-color:#9aa3b2}
+.tk-grid{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:18px;align-items:start}
+@media(max-width:960px){.tk-grid{grid-template-columns:1fr}}
+.tk-main,.tk-side{display:flex;flex-direction:column;gap:18px;min-width:0}
+.card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px 18px}
+.card-h{font-size:18px;color:var(--navy);margin:0 0 12px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}
+.chip{background:var(--soft);border:1px solid var(--line);border-radius:99px;padding:1px 12px;font-size:14px;font-weight:700;color:var(--navy)}
+.msgbox.big{font-size:17px;line-height:1.9;padding:14px 16px;margin:0}
+.who{font-size:19px;font-weight:800;color:var(--navy);margin:0 0 8px}
+.tk-side .kv{grid-template-columns:max-content minmax(0,1fr);font-size:15px}
+.tk-side .kv dd{word-break:break-word}
+.tk-side .email{word-break:break-all}
+/* action card + tabs */
+.card.act{border-color:#b9d3f3;box-shadow:0 2px 10px rgba(42,120,214,.07)}
+.tabs{display:flex;flex-wrap:wrap;gap:4px;border-bottom:2px solid var(--line);margin:0 0 16px}
+.tabs [role=tab]{font:inherit;font-size:15.5px;font-weight:700;color:var(--muted);background:none;border:0;border-bottom:3px solid transparent;margin-bottom:-2px;padding:9px 14px;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.tabs [role=tab][aria-selected=true]{color:var(--navy);border-bottom-color:#2a78d6}
+.tabs [role=tab]:focus-visible{outline:3px solid #e0a800;outline-offset:2px;border-radius:6px}
+.tabs .dot{width:8px;height:8px;border-radius:50%;background:#e0a800;display:inline-block}
+.pane[hidden]{display:none}
+.choice-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-top:6px}
+.choice{display:flex;flex-direction:column;gap:6px;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--soft)}
+.choice.main{background:#f3f8fe;border-color:#cfe0f5}
+.choice .btn{width:100%;justify-content:center}
+.choice small{color:var(--muted);font-size:13.5px;line-height:1.6}
+details.attach{margin:4px 0 12px}
+details.attach summary,details.inline-edit summary{cursor:pointer;color:var(--navy);font-weight:700}
+details.attach[open] summary{margin-bottom:8px}
+details.inline-edit{display:inline-block;margin-inline-start:8px;font-size:14px}
+details.inline-edit form{display:flex;gap:6px;margin-top:6px}
+details.inline-edit select{min-width:0;flex:1}
+.sub-h{margin:14px 0 8px;color:var(--navy);font-size:16px}
+.appt-now{padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--soft);margin-bottom:6px}
+.appt-now-head{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px}
+.appt-when{font-size:19px;font-weight:800;color:var(--navy);margin:4px 0 8px}
+.appt-now .actions{margin-top:8px}
+.note-add{margin-bottom:14px}
+details.more summary{cursor:pointer;margin:0}
+details.more[open] summary{margin-bottom:12px}
+.more-item{padding:12px 0;border-top:1px dashed var(--line)}
+.more-item b{display:block;margin-bottom:6px}
+.more-item.delform{margin:0}
+/* compact details inside the ticket page (override the FAQ accordion look) */
+.tk-page details.inline-edit{display:inline-block;background:none;border:0;padding:0;margin:0 8px 0 0;border-radius:0}
+.tk-page details.inline-edit>summary{display:inline;padding:0;font-size:14px;color:#1f5fae;text-decoration:underline;min-height:0}
+.tk-page details.inline-edit>summary::after{content:none}
+.tk-page details.attach{background:none;border:0;padding:0;border-radius:0}
+.tk-page details.attach>summary{display:inline-flex;gap:6px;padding:6px 0;min-height:0;font-size:15px;color:#1f5fae}
+.tk-page details.attach>summary::after{content:none}
+.tk-page details.more{padding:16px 18px}
+.tk-page details.more>summary{padding:0}
+/* phone/tablet: one column in a working order (request, who, action, rating, log, details, more) */
+@media(max-width:960px){
+  .tk-grid{display:flex;flex-direction:column}
+  .tk-main,.tk-side{display:contents}
+  .o-req{order:1}.o-who{order:2}.o-act{order:3}.o-rate{order:4}.o-log{order:5}.o-info{order:6}.o-more{order:7}
+}

@@ -386,7 +386,7 @@ def appt_staff_action(ref):
     action = request.form.get("action", "")
     ap = active(con, tk["id"])
     ts = now_utc()
-    back = url_for("admin_ticket", ref=ref, saved=1) + "#appt"
+    back = url_for("admin_ticket", ref=ref, saved=1) + "#appt"  # opens the appointment tab
     if tk["anonymous"]:
         abort(400)
     if action == "book":
