@@ -50,7 +50,7 @@
     <thead><tr><th>الرقم</th><th>التاريخ</th><th>النوع</th><th>الموضوع</th>{% if me_admin %}<th>القسم الحالي</th>{% endif %}<th>مقدّم الطلب</th><th>المنشأة</th><th>الحالة</th><th>المهلة</th></tr></thead>
     <tbody>
     {% for r in rows %}{% set is_late = r.status != 'closed' and r.due_at and r.due_at < now %}
-      <tr {% if is_late %}class="is-late"{% endif %}><td><a href="/admin/t/{{ r.ref }}" dir="ltr">{{ r.ref }}</a>{% if r.channel == 'walkin' %} <span class="badge ch-walkin">حضوري</span>{% endif %}</td><td>{{ r.created_at|dt }}</td>
+      <tr {% if is_late %}class="is-late"{% endif %}><td><a href="/admin/t/{{ r.ref }}" dir="ltr">{{ r.ref }}</a>{% if r.channel == 'walkin' and not r.anonymous %} <span class="badge ch-walkin">حضوري</span>{% endif %}</td><td>{{ r.created_at|day if r.anonymous else r.created_at|dt }}</td>
         <td>{{ types.get(r.req_type, r.req_type) }}</td><td>{{ topic_names.get(r.topic, '—') }}</td>
         {% if me_admin %}<td>{{ dept_names.get(r.dept_id, '—') }}</td>{% endif %}
         <td>{% if r.anonymous %}<span class="anon-tag">مجهول</span>{% else %}{{ r.name }} <small dir="ltr">{{ r.emp_no }}</small>{% endif %}</td>

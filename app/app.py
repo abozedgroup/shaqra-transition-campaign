@@ -99,6 +99,8 @@ app.config.update(
 logging.getLogger("werkzeug").setLevel(logging.ERROR)
 log = logging.getLogger("shq")
 log.setLevel(logging.INFO)
+if not log.handlers:  # show our messages next to gunicorn's in the container log
+    log.handlers = logging.getLogger("gunicorn.error").handlers or [logging.StreamHandler()]
 
 
 def _load_secret_key():
@@ -195,6 +197,10 @@ CREATE TABLE IF NOT EXISTS ratings(
   user_id INTEGER
 );
 CREATE INDEX IF NOT EXISTS ix_r_ticket ON ratings(ticket_id);
+CREATE TABLE IF NOT EXISTS counters(
+  name TEXT PRIMARY KEY,
+  value INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS kiosks(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL,
@@ -222,6 +228,7 @@ TICKET_NEW_COLS = [
     ("close_reason", "TEXT NOT NULL DEFAULT ''"),
     ("rating", "INTEGER"),
     ("kiosk_id", "INTEGER"),
+    ("sla_breached", "INTEGER NOT NULL DEFAULT 0"),
 ]
 
 
@@ -235,6 +242,16 @@ def init_db():
         if name not in cols:
             con.execute("ALTER TABLE tickets ADD COLUMN %s %s" % (name, decl))
     con.execute("CREATE INDEX IF NOT EXISTS ix_t_dept ON tickets(dept_id)")
+    if not con.execute("SELECT 1 FROM counters WHERE name='ticket_ref'").fetchone():
+        last = con.execute("SELECT MAX(CAST(ref AS INTEGER)) FROM tickets WHERE ref NOT LIKE 'SHQ-%'").fetchone()[0]
+        con.execute("INSERT INTO counters(name,value) VALUES('ticket_ref',?)", (max(FIRST_REF - 1, last or 0),))
+    # anonymous tickets keep nothing that could point to the person (device, language)
+    con.execute("UPDATE tickets SET kiosk_id=NULL, lang='' WHERE anonymous=1 AND (kiosk_id IS NOT NULL OR lang<>'')")
+    con.execute("UPDATE events SET actor='مقدّم مجهول' WHERE actor LIKE 'الموظف (جهاز الاستقبال%' "
+                "AND ticket_id IN (SELECT id FROM tickets WHERE anonymous=1)")
+    cols_u = [r[1] for r in con.execute("PRAGMA table_info(users)")]
+    if "session_ver" not in cols_u:
+        con.execute("ALTER TABLE users ADD COLUMN session_ver INTEGER NOT NULL DEFAULT 0")
     # tickets closed before the rating cycle existed: closed by the section
     con.execute("UPDATE tickets SET close_reason='staff' WHERE status='closed' AND close_reason=''")
     con.execute("UPDATE tickets SET first_response_at=updated_at WHERE first_response_at='' AND reply<>''")
@@ -304,6 +321,7 @@ def fmt_dt(s):
 
 
 app.jinja_env.filters["dt"] = fmt_dt
+app.jinja_env.filters["day"] = lambda s: fmt_dt(s)[:10] if s else ""
 
 # ---------------------------------------------------------------- rate limit
 _rl = {}
@@ -452,6 +470,36 @@ def inject_i18n():
 
 
 # ---------------------------------------------------------------- automatic closing
+BACKUP_DIR = os.path.join(DATA_DIR, "backups")
+BACKUP_KEEP = 14
+
+
+def backup_daily():
+    """One consistent copy of the database per day in /data/backups, keeping the last 14.
+    Protects against mistakes and corruption; it is on the same disk, so copy it off-server too."""
+    try:
+        name = "tickets-%s.db" % datetime.now(RIYADH).strftime("%Y%m%d")
+        path = os.path.join(BACKUP_DIR, name)
+        if os.path.exists(path):
+            return
+        os.makedirs(BACKUP_DIR, exist_ok=True)
+        tmp = path + ".tmp"
+        src = sqlite3.connect(DB_PATH)
+        dst = sqlite3.connect(tmp)
+        with dst:
+            src.backup(dst)
+        dst.close()
+        src.close()
+        os.chmod(tmp, 0o600)
+        os.replace(tmp, path)
+        olds = sorted(f for f in os.listdir(BACKUP_DIR) if f.startswith("tickets-") and f.endswith(".db"))
+        for f in olds[:-BACKUP_KEEP]:
+            os.remove(os.path.join(BACKUP_DIR, f))
+        log.info("backup written: %s", name)
+    except Exception:  # a failed backup must never break a request
+        log.exception("backup failed")
+
+
 _sweep = {"at": 0.0}
 _sweep_lock = threading.Lock()
 
@@ -464,16 +512,20 @@ def auto_close(con, force=False):
             return 0
         _sweep["at"] = now
     ts = now_utc()
-    rows = con.execute("SELECT id FROM tickets WHERE status='resolved' AND rate_due_at<>'' AND rate_due_at<?",
-                       (ts,)).fetchall()
-    for (tid,) in rows:
-        con.execute("UPDATE tickets SET status='closed', closed_at=?, close_reason='auto', updated_at=? WHERE id=?",
-                    (ts, ts, tid))
-        log_event(con, tid, "النظام", "autoclose",
-                  "لم يقيّم الموظف خلال %d أيام عمل؛ يُعتبر الرد قد وصل." % RATE_WINDOW_DAYS)
-    if rows:
-        con.commit()
-    return len(rows)
+    rows = con.execute("SELECT id, rate_due_at FROM tickets WHERE status='resolved' AND rate_due_at<>'' "
+                       "AND rate_due_at<?", (ts,)).fetchall()
+    n = 0
+    for tid, due in rows:
+        # closed as of the end of the rating window (not the moment someone happened to open the dashboard)
+        cur = con.execute("UPDATE tickets SET status='closed', closed_at=?, close_reason='auto', updated_at=? "
+                          "WHERE id=? AND status='resolved'", (due, ts, tid))
+        if cur.rowcount == 1:
+            n += 1
+            log_event(con, tid, "النظام", "autoclose",
+                      "لم يقيّم الموظف خلال %d أيام عمل؛ يُعتبر الرد قد وصل." % RATE_WINDOW_DAYS)
+    con.commit()
+    backup_daily()
+    return n
 
 
 @app.before_request
@@ -483,22 +535,46 @@ def _auto_close_hook():
 
 
 def save_rating(con, row, stars, resolved, comment, via):
-    """Store the employee's rating. Resolved -> closed; not resolved -> back to the section."""
+    """Store the employee's rating. Resolved -> closed; not resolved -> back to the section.
+    Returns False if the ticket was no longer waiting for a rating (double tap, auto-close in between)."""
     ts = now_utc()
+    if con.in_transaction:
+        con.commit()
+    con.execute("BEGIN IMMEDIATE")
+    if resolved:
+        cur = con.execute("UPDATE tickets SET status='closed', closed_at=?, close_reason='rated', rating=?, "
+                          "updated_at=? WHERE id=? AND status='resolved'", (ts, stars, ts, row["id"]))
+    else:
+        d = dept_by_id(row["dept_id"])
+        cur = con.execute("UPDATE tickets SET status='in_progress', rating=?, rate_due_at='', resolved_at='', "
+                          "due_at=?, updated_at=?, sla_breached=MAX(sla_breached, ?) WHERE id=? AND status='resolved'",
+                          (stars, add_workdays(ts, d["sla_days"] if d else 3), ts,
+                           1 if row["resolved_at"] and row["due_at"] and row["resolved_at"] > row["due_at"] else 0,
+                           row["id"]))
+    if cur.rowcount != 1:
+        con.rollback()
+        return False
     con.execute("INSERT INTO ratings(ticket_id,at,stars,resolved,comment,via,dept_id,user_id) VALUES(?,?,?,?,?,?,?,?)",
                 (row["id"], ts, stars, 1 if resolved else 0, comment, via, row["dept_id"], row["assigned_user_id"]))
     who = "مقدّم مجهول" if row["anonymous"] else "الموظف"
     txt = "%d من 5 – %s%s" % (stars, "تم حل الطلب" if resolved else "لم يُحل الطلب", ("\n" + comment) if comment else "")
-    log_event(con, row["id"], who + (" (جهاز الاستقبال)" if via == "kiosk" else ""), "rating", txt)
-    if resolved:
-        con.execute("UPDATE tickets SET status='closed', closed_at=?, close_reason='rated', rating=?, updated_at=? "
-                    "WHERE id=?", (ts, stars, ts, row["id"]))
-    else:
-        d = dept_by_id(row["dept_id"])
-        con.execute("UPDATE tickets SET status='in_progress', rating=?, rate_due_at='', resolved_at='', due_at=?, "
-                    "updated_at=? WHERE id=?", (stars, add_workdays(ts, d["sla_days"] if d else 3), ts, row["id"]))
+    log_event(con, row["id"], who + (" (جهاز الاستقبال)" if via == "kiosk" and not row["anonymous"] else ""),
+              "rating", txt)
+    if not resolved:
         log_event(con, row["id"], "النظام", "reopen", "أُعيدت التذكرة للقسم لأن الموظف أفاد بأن طلبه لم يُحل.")
     con.commit()
+    return True
+
+
+def leg_was_late(row, ts):
+    """Before a deadline is reset (escalation, reopening), remember whether the current leg missed it,
+    so a late ticket cannot become 'on time' in the indicators."""
+    if not row["due_at"]:
+        return False
+    if row["status"] in OPEN_STATUSES:
+        return ts > row["due_at"]
+    fin = row["resolved_at"] or row["closed_at"]
+    return bool(fin) and fin > row["due_at"]
 
 
 def read_rating_form(form):
@@ -607,13 +683,66 @@ def validate_ticket(form, lang="ar", min_msg=10):
     return v, errors
 
 
-_ref_lock = threading.Lock()
-
-
 def new_ref(con):
-    """Short sequential ticket number (1001, 1002, ...). Call while holding _ref_lock."""
-    last = con.execute("SELECT MAX(CAST(ref AS INTEGER)) FROM tickets WHERE ref NOT LIKE 'SHQ-%'").fetchone()[0]
-    return str(max(FIRST_REF - 1, last or 0) + 1)
+    """Next short ticket number (1001, 1002, ...). The counter only goes up, even if tickets are deleted.
+    Must run inside the caller's write transaction (BEGIN IMMEDIATE) so two requests never get the same number."""
+    con.execute("UPDATE counters SET value=value+1 WHERE name='ticket_ref'")
+    return str(con.execute("SELECT value FROM counters WHERE name='ticket_ref'").fetchone()[0])
+
+
+def new_follow_code():
+    return "".join(secrets.choice(REF_ALPHABET) for _ in range(FOLLOW_CODE_LEN))
+
+
+def create_ticket(con, values, lang, photos=(), channel="online", kiosk=None):
+    """Insert a ticket and return (ref, follow-up code, department row). Every new ticket gets a secret
+    follow-up code: the short number alone (or with an email) is not enough to read a reply."""
+    # complaints, feedback and suggestions go to their own section; everything else starts at Employee Care
+    dept = dept_by_key(COMPLAINTS_KEY) if values["req_type"] in ANON_TYPES else None
+    if not dept or not dept["active"]:
+        dept = dept_by_key(INTAKE_KEY)
+    anon = bool(values["anonymous"])
+    if con.in_transaction:
+        con.commit()
+    con.execute("BEGIN IMMEDIATE")
+    try:
+        ref = new_ref(con)
+        ts = now_utc()
+        code = new_follow_code()
+        cur = con.execute(
+            "INSERT INTO tickets(ref,created_at,updated_at,email,mobile,emp_no,name,facility,job_cat,req_type,"
+            "message,lang,topic,dept_id,anonymous,follow_hash,due_at,channel,kiosk_id) "
+            "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (ref, ts, ts, values["email"], values["mobile"], values["emp_no"], values["name"],
+             values["facility"], values["job_cat"], values["req_type"], values["message"],
+             "" if anon else lang,  # the language could point to a person: not kept for anonymous tickets
+             values["topic"], dept["id"], 1 if anon else 0, follow_hash(ref, code),
+             add_workdays(ts, dept["sla_days"]), channel,
+             None if anon or not kiosk else kiosk["id"]))
+        store_photos(con, cur.lastrowid, photos, "employee")
+        if anon:
+            actor = "مقدّم مجهول"
+        elif kiosk:
+            actor = "الموظف (جهاز الاستقبال: %s)" % kiosk["name"]
+        else:
+            actor = "الموظف"
+        note = "طلب حضوري" if channel == "walkin" else ""
+        if photos:
+            note = (note + " · " if note else "") + "%d صورة مرفقة" % len(photos)
+        log_event(con, cur.lastrowid, actor, "create", note, to_dept=dept["id"])
+        con.commit()
+    except Exception:
+        con.rollback()
+        raise
+    return ref, code, dept
+
+
+def as_id(s):
+    """A positive database id from user input, or None (never raises)."""
+    s = (s or "").strip()
+    if s.isascii() and s.isdigit() and 0 < len(s) <= 9:
+        return int(s)
+    return None
 
 
 def norm_ref(s):
@@ -628,7 +757,8 @@ try:
     register_heif_opener()
 except Exception:  # HEIC support is optional
     pass
-Image.MAX_IMAGE_PIXELS = 50_000_000
+MAX_PHOTO_PIXELS = 40_000_000  # ~ a 48 MP phone photo; larger is refused before decoding
+Image.MAX_IMAGE_PIXELS = MAX_PHOTO_PIXELS  # Pillow raises above twice this; we check the size ourselves first
 
 
 def read_photos(files):
@@ -646,6 +776,11 @@ def read_photos(files):
             im = Image.open(io.BytesIO(data))
             if im.format not in ("JPEG", "PNG", "WEBP", "HEIF", "GIF", "MPO"):
                 return [], "photos_type"
+            w, h = im.size
+            if w * h > MAX_PHOTO_PIXELS or w > 20000 or h > 20000:
+                return [], "photos_size"
+            if im.format in ("JPEG", "MPO"):
+                im.draft("RGB", (PHOTO_MAX_SIDE, PHOTO_MAX_SIDE))  # decode at reduced size: far less memory
             im.seek(0)
             im.load()
             im = ImageOps.exif_transpose(im)
@@ -714,7 +849,7 @@ def ticket_form():
         if not errors:
             con = db()
             if values["anonymous"]:
-                if rate_hit("ta:" + ip, 5, 86400):
+                if rate_hit("ta:" + ip, 30, 86400):  # one IP is often a whole hospital (NAT)
                     abort(429)
             else:
                 since = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -722,30 +857,10 @@ def ticket_form():
                                 (values["email"], since)).fetchone()[0]
                 if n >= 5:
                     abort(429)
-            # complaints, feedback and suggestions go to their own section; everything else starts at Employee Care
-            dept = dept_by_key(COMPLAINTS_KEY) if values["req_type"] in ANON_TYPES else None
-            if not dept or not dept["active"]:
-                dept = dept_by_key(INTAKE_KEY)
-            with _ref_lock:
-                ref = new_ref(con)
-                ts = now_utc()
-                code, fh = "", ""
-                if values["anonymous"]:
-                    code = "".join(secrets.choice(REF_ALPHABET) for _ in range(FOLLOW_CODE_LEN))
-                    fh = follow_hash(ref, code)
-                cur = con.execute(
-                    "INSERT INTO tickets(ref,created_at,updated_at,email,mobile,emp_no,name,facility,job_cat,req_type,"
-                    "message,lang,topic,dept_id,anonymous,follow_hash,due_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                    (ref, ts, ts, values["email"], values["mobile"], values["emp_no"], values["name"],
-                     values["facility"], values["job_cat"], values["req_type"], values["message"], lang,
-                     values["topic"], dept["id"], 1 if values["anonymous"] else 0, fh,
-                     add_workdays(ts, dept["sla_days"])))
-                store_photos(con, cur.lastrowid, photos, "employee")
-                log_event(con, cur.lastrowid, "الموظف" if not values["anonymous"] else "مقدّم مجهول", "create",
-                          "%d صورة مرفقة" % len(photos) if photos else "", to_dept=dept["id"])
-                con.commit()
+            ref, code, dept = create_ticket(con, values, lang, photos)
             session["done_ref"] = ref
             session["done_code"] = code
+            session["done_anon"] = bool(values["anonymous"])
             return redirect(pre + "/ticket/done")
     else:
         t = LEGACY_TYPES.get(request.args.get("type", ""), request.args.get("type", ""))
@@ -776,7 +891,8 @@ def ticket_form():
 def ticket_done():
     ref = session.pop("done_ref", None)
     code = session.pop("done_code", "")
-    return render_template("ticket_done.html", ref=ref, code=code)
+    anon = session.pop("done_anon", False)
+    return render_template("ticket_done.html", ref=ref, code=code, anon=anon)
 
 
 @app.route("/status", methods=["GET", "POST"])
@@ -786,7 +902,7 @@ def status_lookup():
     i = 0 if lang == "ar" else 1
     result, error, dept_name, photos, rated = None, None, "", [], None
     cols = ("SELECT id,ref,created_at,updated_at,req_type,status,reply,dept_id,anonymous,assigned_user_id,"
-            "rate_due_at,close_reason,rating FROM tickets ")
+            "rate_due_at,close_reason,rating,resolved_at,due_at FROM tickets ")
     if request.method == "POST" and request.form.get("action") == "rate":
         # rating a ticket this visitor has just looked up (same session)
         check_csrf()
@@ -796,8 +912,8 @@ def status_lookup():
             abort(400)
         vals = read_rating_form(request.form)
         if row["status"] == "resolved" and vals:
-            save_rating(db(), row, *vals, via="online")
-            rated = "ok" if vals[1] else "reopened"
+            if save_rating(db(), row, *vals, via="online"):
+                rated = "ok" if vals[1] else "reopened"
         elif row["status"] == "resolved":
             error = T[lang]["rt_missing"]
         result = db().execute(cols + "WHERE id=?", (row["id"],)).fetchone()
@@ -811,20 +927,20 @@ def status_lookup():
         row = None
         if REF_RE.match(ref):
             if "@" in key:
+                # tickets created before follow-up codes existed (no code was ever given) keep email lookup
                 if EMAIL_RE.match(key.lower()):
-                    row = db().execute(cols + "WHERE ref=? AND email=? AND anonymous=0",
+                    row = db().execute(cols + "WHERE ref=? AND email=? AND anonymous=0 AND follow_hash=''",
                                        (ref, key.lower())).fetchone()
             else:
                 code = norm_code(key)
                 if len(code) in (FOLLOW_CODE_LEN, 8):
-                    row = db().execute(cols + "WHERE ref=? AND anonymous=1 AND follow_hash=?",
+                    row = db().execute(cols + "WHERE ref=? AND follow_hash=?",
                                        (ref, follow_hash(ref, code))).fetchone()
         if row:
             result = row
             ok_ids = [x for x in session.get("st_ok", []) if x != row["id"]][-9:] + [row["id"]]
             session["st_ok"] = ok_ids
         else:
-            time.sleep(0.4)
             error = T[lang]["st_notfound"]
     if result:
         photos = db().execute("SELECT token, source FROM attachments WHERE ticket_id=? ORDER BY id",
@@ -915,28 +1031,8 @@ def kiosk_new():
                 if con.execute("SELECT COUNT(*) FROM tickets WHERE email=? AND created_at>?",
                                (values["email"], since)).fetchone()[0] >= 5:
                     abort(429)
-            dept = dept_by_key(COMPLAINTS_KEY) if values["req_type"] in ANON_TYPES else None
-            if not dept or not dept["active"]:
-                dept = dept_by_key(INTAKE_KEY)
-            with _ref_lock:
-                ref = new_ref(con)
-                ts = now_utc()
-                code, fh = "", ""
-                if values["anonymous"]:
-                    code = "".join(secrets.choice(REF_ALPHABET) for _ in range(FOLLOW_CODE_LEN))
-                    fh = follow_hash(ref, code)
-                cur = con.execute(
-                    "INSERT INTO tickets(ref,created_at,updated_at,email,mobile,emp_no,name,facility,job_cat,req_type,"
-                    "message,lang,topic,dept_id,anonymous,follow_hash,due_at,channel,kiosk_id) "
-                    "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                    (ref, ts, ts, values["email"], values["mobile"], values["emp_no"], values["name"],
-                     values["facility"], values["job_cat"], values["req_type"], values["message"], lang,
-                     values["topic"], dept["id"], 1 if values["anonymous"] else 0, fh,
-                     add_workdays(ts, dept["sla_days"]), "walkin", g.kiosk["id"]))
-                log_event(con, cur.lastrowid, "الموظف (جهاز الاستقبال: %s)" % g.kiosk["name"], "create",
-                          "طلب حضوري", to_dept=dept["id"])
-                con.commit()
-            session["k_done"] = [ref, code, dept["name_ar"] if lang == "ar" else dept["name_en"]]
+            ref, code, dept = create_ticket(con, values, lang, channel="walkin", kiosk=g.kiosk)
+            session["k_done"] = [ref, code, dept["name_ar"] if lang == "ar" else dept["name_en"], bool(values["anonymous"])]
             return redirect(_kiosk_pre() + "/done")
     else:
         t = request.args.get("type", "")
@@ -959,7 +1055,8 @@ def kiosk_done():
     d = session.pop("k_done", None)
     if not d:
         return redirect(_kiosk_pre())
-    return render_template("kiosk_done.html", ref=d[0], code=d[1], dept=d[2], kpre=_kiosk_pre())
+    return render_template("kiosk_done.html", ref=d[0], code=d[1], dept=d[2], anon=d[3] if len(d) > 3 else False,
+                           kpre=_kiosk_pre())
 
 
 @app.route("/kiosk/rate", methods=["GET", "POST"])
@@ -983,9 +1080,9 @@ def kiosk_rate():
             elif not vals:
                 stage, error = "rate", T[lang]["rt_missing"]
             else:
-                save_rating(con, row, *vals, via="kiosk")
+                ok_ = save_rating(con, row, *vals, via="kiosk")
                 session.pop("k_rate", None)
-                stage = "thanks" if vals[1] else "reopened"
+                stage = ("thanks" if vals[1] else "reopened") if ok_ else "closed"
         else:
             if rate_hit("kr:%d" % g.kiosk["id"], 40, 600):
                 abort(429)
@@ -997,7 +1094,6 @@ def kiosk_rate():
                           or (r["anonymous"] and r["follow_hash"] == follow_hash(ref, key))):
                     row = r
             if not row:
-                time.sleep(0.4)
                 error = T[lang]["k_rate_notfound"]
             elif row["status"] == "resolved":
                 session["k_rate"] = row["id"]
@@ -1030,6 +1126,10 @@ _DUMMY_HASH = hash_password(secrets.token_hex(8))  # equal timing for unknown us
 ENV_ADMIN = {"id": 0, "username": ADMIN_USER, "display_name": "المشرف العام", "role": "admin", "dept_id": None}
 
 
+def _env_admin_ver():
+    return hashlib.sha256(ADMIN_PASSWORD_HASH.encode()).hexdigest()[:16]
+
+
 def current_user():
     if "user" in g:
         return g.user
@@ -1040,11 +1140,12 @@ def current_user():
             session.clear()
         return None
     if uid == 0:
-        if ADMIN_USER and ADMIN_PASSWORD_HASH:
+        if ADMIN_USER and ADMIN_PASSWORD_HASH and session.get("ver") == _env_admin_ver():
             g.user = dict(ENV_ADMIN)
     else:
         r = db().execute("SELECT * FROM users WHERE id=? AND active=1", (uid,)).fetchone()
-        if r:
+        # a password change or suspension bumps session_ver and ends every open session of that account
+        if r and session.get("ver") == r["session_ver"]:
             g.user = dict(r)
     if g.user is None:
         session.clear()
@@ -1093,31 +1194,34 @@ def admin_login():
     if request.method == "POST":
         check_csrf()
         ip = client_ip()
-        if rate_peek("al:" + ip, 5, 900):
-            abort(429)
         username = clean(request.form.get("username"), 64).lower()
+        # 5 wrong passwords per account per 15 min; a generous per-IP cap because a hospital shares one IP
+        if rate_peek("alu:" + username, 5, 900) or rate_peek("al:" + ip, 40, 900):
+            abort(429)
         pw = request.form.get("password", "")[:200]
         uid = None
+        ver = None
         r = con.execute("SELECT * FROM users WHERE username=? AND active=1", (username,)).fetchone()
         if r:
             if check_hash(r["pw_hash"], pw):
-                uid = r["id"]
+                uid, ver = r["id"], r["session_ver"]
                 con.execute("UPDATE users SET last_login=? WHERE id=?", (now_utc(), r["id"]))
                 con.commit()
         elif ADMIN_USER and ADMIN_PASSWORD_HASH and hmac.compare_digest(username.encode(), ADMIN_USER.lower().encode()):
             if check_hash(ADMIN_PASSWORD_HASH, pw):
-                uid = 0
+                uid, ver = 0, _env_admin_ver()
         else:
             check_hash(_DUMMY_HASH, pw)
         if uid is not None:
             session.clear()
             session.permanent = True
             session["uid"] = uid
+            session["ver"] = ver
             session["at"] = time.time()
             csrf_token()
             return redirect(url_for("admin_list"))
         rate_add("al:" + ip)
-        time.sleep(0.8)
+        rate_add("alu:" + username)
         error = "بيانات الدخول غير صحيحة."
     return render_template("admin_login.html", error=error, configured=configured)
 
@@ -1146,8 +1250,10 @@ def admin_password():
         elif new != request.form.get("new2", ""):
             err = "تأكيد كلمة المرور غير مطابق."
         else:
-            db().execute("UPDATE users SET pw_hash=? WHERE id=?", (hash_password(new), u["id"]))
+            db().execute("UPDATE users SET pw_hash=?, session_ver=session_ver+1 WHERE id=?",
+                         (hash_password(new), u["id"]))
             db().commit()
+            session["ver"] = u["session_ver"] + 1  # keep this session, end the others
             msg = "تم تغيير كلمة المرور."
     return render_template("admin_password.html", msg=msg, err=err)
 
@@ -1184,8 +1290,8 @@ def _filters(u):
         f["type"] = ""
     if f["topic"]:
         where.append("topic=?"); args.append(f["topic"])
-    if is_admin_user(u) and f["dept"].isdigit():
-        where.append("dept_id=?"); args.append(int(f["dept"]))
+    if is_admin_user(u) and as_id(f["dept"]):
+        where.append("dept_id=?"); args.append(as_id(f["dept"]))
     else:
         f["dept"] = ""
     if f["channel"] in CHANNELS:
@@ -1234,7 +1340,7 @@ def admin_list():
     u = current_user()
     f, where, args = _filters(u)
     try:
-        page = max(1, int(request.args.get("page", "1")))
+        page = min(100000, max(1, int(request.args.get("page", "1"))))
     except ValueError:
         page = 1
     per = 30
@@ -1271,7 +1377,7 @@ EVENT_KINDS = {"create": "تقديم التذكرة", "status": "تغيير ال
                "note": "ملاحظة داخلية", "escalate": "تصعيد / إحالة", "topic": "تعديل التصنيف",
                "photo": "إرفاق صور", "resolve": "إنهاء وإرسال للتقييم", "rating": "تقييم الموظف",
                "autoclose": "إغلاق تلقائي", "close": "إغلاق دون تقييم", "reopen": "إعادة فتح",
-               "assign": "استلام"}
+               "assign": "استلام", "newcode": "رمز متابعة جديد"}
 
 
 def _load_ticket(ref, u):
@@ -1300,7 +1406,7 @@ def admin_ticket(ref):
             photos, perr = read_photos(request.files.getlist("photos"))
             if perr:
                 return _render_ticket(row, u, ERR[perr][0])
-            if row["status"] not in OPEN_STATUSES and row["status"] != "resolved":
+            if row["status"] not in OPEN_STATUSES and not (row["status"] == "resolved" and action == "save"):
                 abort(400)
             if action == "resolve" and len(reply) < 2:
                 return _render_ticket(row, u, "اكتب الرد على الموظف قبل إنهاء التذكرة وإرسالها للتقييم.")
@@ -1345,12 +1451,24 @@ def admin_ticket(ref):
                 abort(400)
             d = dept_by_id(row["dept_id"])
             con.execute("UPDATE tickets SET status='in_progress', closed_at='', close_reason='', rate_due_at='', "
-                        "resolved_at='', due_at=?, updated_at=? WHERE id=?",
-                        (add_workdays(ts, d["sla_days"] if d else 3), ts, row["id"]))
+                        "resolved_at='', due_at=?, updated_at=?, sla_breached=MAX(sla_breached, ?) WHERE id=?",
+                        (add_workdays(ts, d["sla_days"] if d else 3), ts, 1 if leg_was_late(row, ts) else 0,
+                         row["id"]))
             log_event(con, row["id"], actor, "reopen", clean(request.form.get("reopen_note"), 1000))
             con.commit()
             return redirect(url_for("admin_ticket", ref=ref, saved=1))
+        if action == "newcode":
+            # the employee lost the follow-up code: issue a new one and read it to them by phone
+            code = new_follow_code()
+            con.execute("UPDATE tickets SET follow_hash=?, updated_at=? WHERE id=?",
+                        (follow_hash(row["ref"], code), ts, row["id"]))
+            log_event(con, row["id"], actor, "newcode", "أُصدر رمز متابعة جديد وأُلغي الرمز السابق.")
+            con.commit()
+            session["new_code"] = [row["ref"], code]
+            return redirect(url_for("admin_ticket", ref=ref, saved=1))
         if action == "take":
+            if row["status"] not in OPEN_STATUSES:
+                abort(400)
             if u["id"]:
                 con.execute("UPDATE tickets SET assigned_user_id=?, updated_at=? WHERE id=?", (u["id"], ts, row["id"]))
                 log_event(con, row["id"], actor, "assign", "استلم التذكرة")
@@ -1366,23 +1484,28 @@ def admin_ticket(ref):
                 con.commit()
                 return redirect(url_for("admin_ticket", ref=ref, saved=1) + "#timeline")
         elif action == "escalate":
-            to = request.form.get("to_dept", "")
+            if row["status"] not in OPEN_STATUSES:
+                abort(400)
+            to = as_id(request.form.get("to_dept"))
             reason = clean(request.form.get("reason"), 2000)
-            d = dept_by_id(int(to)) if to.isdigit() else None
+            d = dept_by_id(to) if to else None
             if not d or not d["active"] or d["id"] == row["dept_id"]:
                 err = "اختر القسم الذي ستُحال إليه التذكرة."
             elif len(reason) < 5:
                 err = "اكتب سبب التصعيد ليعرف القسم المستلم ما المطلوب."
             else:
-                con.execute("UPDATE tickets SET dept_id=?, status='escalated', due_at=?, closed_at='', close_reason='', "
-                            "rate_due_at='', resolved_at='', assigned_user_id=NULL, updated_at=? WHERE id=?",
-                            (d["id"], add_workdays(ts, d["sla_days"]), ts, row["id"]))
+                con.execute("UPDATE tickets SET dept_id=?, status='escalated', due_at=?, assigned_user_id=NULL, "
+                            "updated_at=?, sla_breached=MAX(sla_breached, ?) WHERE id=?",
+                            (d["id"], add_workdays(ts, d["sla_days"]), ts, 1 if leg_was_late(row, ts) else 0,
+                             row["id"]))
                 log_event(con, row["id"], actor, "escalate", reason, row["dept_id"], d["id"])
                 con.commit()
                 if is_admin_user(u):
                     return redirect(url_for("admin_ticket", ref=ref, saved=1))
                 return redirect(url_for("admin_list", moved=ref))
         elif action == "topic":
+            if row["status"] == "closed":
+                abort(400)
             tp = request.form.get("topic", "")
             names = _topic_names()
             if tp in names and tp != row["topic"]:
@@ -1404,7 +1527,9 @@ def _render_ticket(row, u, err=None):
     ratings = con.execute("SELECT * FROM ratings WHERE ticket_id=? ORDER BY id", (row["id"],)).fetchall()
     assignee = con.execute("SELECT display_name FROM users WHERE id=?", (row["assigned_user_id"],)).fetchone() \
         if row["assigned_user_id"] else None
-    return render_template("admin_ticket.html", ratings=ratings, assignee=assignee, channels=CHANNELS,
+    nc = session.pop("new_code", None)
+    new_code = nc[1] if nc and nc[0] == row["ref"] else ""
+    return render_template("admin_ticket.html", ratings=ratings, new_code=new_code, assignee=assignee, channels=CHANNELS,
                            close_reasons=CLOSE_REASONS, rate_days=RATE_WINDOW_DAYS, open_statuses=OPEN_STATUSES, tk=row, statuses=STATUSES, types=REQ_TYPES,
                            saved=request.args.get("saved") == "1", err=err, events=events, kinds=EVENT_KINDS,
                            dept_names=dnames, depts=[d for d in depts if d["active"] and d["id"] != row["dept_id"]],
@@ -1473,8 +1598,8 @@ def admin_departments():
         did = request.form.get("id", "")
         if len(v["name_ar"]) < 2:
             err = "اكتب اسم القسم."
-        elif did.isdigit():
-            d = dept_by_id(int(did))
+        elif as_id(did):
+            d = dept_by_id(as_id(did))
             if not d:
                 abort(404)
             if d["key"] in (INTAKE_KEY, COMPLAINTS_KEY):
@@ -1510,7 +1635,7 @@ def admin_users():
         name = clean(request.form.get("display_name"), 60)
         role = request.form.get("role", "staff")
         dept = request.form.get("dept_id", "")
-        dept_id = int(dept) if dept.isdigit() and dept_by_id(int(dept)) else None
+        dept_id = as_id(dept) if as_id(dept) and dept_by_id(as_id(dept)) else None
         pw = request.form.get("password", "")[:200]
         if role not in ROLES:
             abort(400)
@@ -1518,8 +1643,8 @@ def admin_users():
             err = "اكتب اسم الموظف."
         elif role == "staff" and not dept_id:
             err = "اختر قسم الموظف."
-        elif uid.isdigit():
-            r = con.execute("SELECT * FROM users WHERE id=?", (int(uid),)).fetchone()
+        elif as_id(uid):
+            r = con.execute("SELECT * FROM users WHERE id=?", (as_id(uid),)).fetchone()
             if not r:
                 abort(404)
             active = 1 if request.form.get("active") == "1" else 0
@@ -1532,6 +1657,8 @@ def admin_users():
                             (name, role, dept_id, active, r["id"]))
                 if pw:
                     con.execute("UPDATE users SET pw_hash=? WHERE id=?", (hash_password(pw), r["id"]))
+                if pw or not active:
+                    con.execute("UPDATE users SET session_ver=session_ver+1 WHERE id=?", (r["id"],))
                 con.commit()
                 msg = "تم حفظ الحساب%s." % (" وتغيير كلمة المرور" if pw else "")
         else:
@@ -1580,8 +1707,8 @@ def admin_kiosks():
                 return resp
         elif action in ("disable", "enable"):
             kid = request.form.get("id", "")
-            if kid.isdigit():
-                con.execute("UPDATE kiosks SET active=? WHERE id=?", (1 if action == "enable" else 0, int(kid)))
+            if as_id(kid):
+                con.execute("UPDATE kiosks SET active=? WHERE id=?", (1 if action == "enable" else 0, as_id(kid)))
                 con.commit()
                 msg = "تم تحديث الجهاز."
     kiosks = con.execute("SELECT k.*, (SELECT COUNT(*) FROM tickets t WHERE t.kiosk_id=k.id) AS n "
@@ -1592,9 +1719,10 @@ def admin_kiosks():
 # ---------------------------------------------------------------- indicators
 def _parse_day(s, default):
     try:
-        return datetime.strptime(s, "%Y-%m-%d").date()
+        d = datetime.strptime(s, "%Y-%m-%d").date()
     except (TypeError, ValueError):
         return default
+    return d if 2020 <= d.year <= 2100 else default
 
 
 def _utc_of_day(d):
@@ -1653,8 +1781,8 @@ def compute_stats(u, args):
     f = {"from": d_from.isoformat(), "to": d_to.isoformat(), "dept": "", "channel": ""}
     where, params = _visible(u)
     where = list(where)
-    if is_admin_user(u) and (args.get("dept") or "").isdigit():
-        f["dept"] = args.get("dept")
+    if is_admin_user(u) and as_id(args.get("dept")):
+        f["dept"] = str(as_id(args.get("dept")))
         where.append("dept_id=?"); params.append(int(f["dept"]))
     if args.get("channel") in CHANNELS:
         f["channel"] = args.get("channel")
@@ -1663,14 +1791,13 @@ def compute_stats(u, args):
     con = db()
     base = (" AND " + " AND ".join(where)) if where else ""
     rows = con.execute("SELECT * FROM tickets WHERE created_at>=? AND created_at<?" + base, [lo, hi] + params).fetchall()
-    ids = [r["id"] for r in rows]
     now = now_utc()
-    esc, rat = set(), {}
-    if ids:
-        qs = ",".join("?" * len(ids))
-        esc = {r[0] for r in con.execute("SELECT DISTINCT ticket_id FROM events WHERE kind='escalate' AND ticket_id IN (%s)" % qs, ids)}
-        for r in con.execute("SELECT * FROM ratings WHERE ticket_id IN (%s) ORDER BY id" % qs, ids):
-            rat.setdefault(r["ticket_id"], []).append(r)
+    rat = {}
+    sub = "SELECT id FROM tickets WHERE created_at>=? AND created_at<?" + base
+    esc = {r[0] for r in con.execute("SELECT DISTINCT ticket_id FROM events WHERE kind='escalate' AND ticket_id IN ("
+                                     + sub + ")", [lo, hi] + params)}
+    for r in con.execute("SELECT * FROM ratings WHERE ticket_id IN (" + sub + ") ORDER BY id", [lo, hi] + params):
+        rat.setdefault(r["ticket_id"], []).append(r)
     users = {r["id"]: r["display_name"] for r in con.execute("SELECT id, display_name FROM users")}
     dnames = {d["id"]: d["name_ar"] for d in all_depts()}
     tnames = _topic_names()
@@ -1682,7 +1809,7 @@ def compute_stats(u, args):
         n = len(rs)
         closed = [r for r in rs if r["status"] == "closed"]
         done = [r for r in rs if finish(r)]
-        on_time = [r for r in done if r["due_at"] and finish(r) <= r["due_at"]]
+        on_time = [r for r in done if r["due_at"] and not r["sla_breached"] and finish(r) <= r["due_at"]]
         allr = [x for r in rs for x in rat.get(r["id"], [])]
         reached = [r for r in rs if r["resolved_at"] or r["close_reason"] in ("rated", "auto")]
         rated_t = [r for r in reached if rat.get(r["id"])]

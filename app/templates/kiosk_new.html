@@ -25,6 +25,7 @@
     <div class="field anonbox" id="anonbox">
       <label class="chk"><input type="checkbox" name="anonymous" value="1" id="anonymous" {% if v.anonymous %}checked{% endif %}> <span><b>{{ t.anon_lbl }}</b></span></label>
       <span class="hint">{{ t.anon_hint }}</span>
+      <span class="hint"><b>{{ t.k_anon_note }}</b></span>
     </div>
     <div class="field {% if errors.message %}bad{% endif %}" id="g-message"><label for="message">{{ t.k_msg }}</label>
       <textarea id="message" name="message" maxlength="3000" class="short" required>{{ v.message or '' }}</textarea>{{ fld_err('message') }}</div>

@@ -33,7 +33,8 @@ t = tok(h)
 base = dict(csrf_token=t, req_type="request", topic="leaves", message="أريد الاستفسار عن رصيد إجازتي", name="أحمد محمد",
             emp_no="12345", facility="shaqra_hospital", job_cat="nursing", email="ahmad@moh.gov.sa", mobile="0512345678", consent="1")
 r = c.post("/ticket", data=base); ok(r.status_code == 302, "named ticket created")
-r, h = get(c, "/ticket/done"); ref1 = re.search(r'<span class="ref">(\d+)</span>', h).group(1); ok(ref1 == "1001", "first short ref is 1001"); ok("رمز المتابعة" not in h, "named done page: no code " + ref1)
+r, h = get(c, "/ticket/done"); ref1 = re.search(r'<span class="ref">(\d+)</span>', h).group(1); ok(ref1 == "1001", "first short ref is 1001")
+code1 = re.findall(r'<span class="ref">([^<]+)</span>', h)[1]; ok(re.match(r"^[A-Z0-9]{3}-[A-Z0-9]{3}$", code1), "named ticket also gets a follow-up code " + code1)
 # missing topic
 r = c.post("/ticket", data=dict(base, topic="")); ok(r.status_code == 400 and "اختر موضوع طلبك" in r.get_data(as_text=True), "topic required")
 # anonymous inquiry is NOT allowed -> needs personal data
@@ -52,7 +53,9 @@ r, h = get(c, "/status"); t2 = tok(h)
 h = c.post("/status", data=dict(csrf_token=t2, ref=ref2, email=code.lower().replace("-", " "))).get_data(as_text=True)
 ok("الشكاوى والملاحظات" in h and "جديدة" in h, "anonymous status lookup by code")
 h = c.post("/status", data=dict(csrf_token=t2, ref=ref2, email="AAAA-BBBB")).get_data(as_text=True); ok("لا توجد تذكرة" in h, "wrong code rejected")
-h = c.post("/status", data=dict(csrf_token=t2, ref=ref1, email="ahmad@moh.gov.sa")).get_data(as_text=True); ok("العناية بالموظفين" in h, "named lookup by email")
+h = c.post("/status", data=dict(csrf_token=t2, ref=ref1, email="ahmad@moh.gov.sa")).get_data(as_text=True); ok("لا توجد تذكرة" in h, "new ticket: email alone no longer opens it")
+h = c.post("/status", data=dict(csrf_token=t2, ref=ref1, email=code1)).get_data(as_text=True); ok("العناية بالموظفين" in h, "named lookup by code")
+h = c.post("/status", data=dict(csrf_token=t2, ref="SHQ-261101-OLD22", email="old@moh.gov.sa")).get_data(as_text=True); ok("SHQ-261101-OLD22" in h and "لا توجد تذكرة" not in h, "legacy ticket still opens by email")
 
 # admin
 a = A.app.test_client(); r, h = get(a, "/admin/login")
@@ -97,7 +100,7 @@ r, h = get(s, "/admin/t/" + ref1)
 ok("يحتاج تأكيد رصيد" in h and "راجعت الطلب" in h and "من العناية بالموظفين إلى الإجازات" in h, "timeline shows note and escalation")
 h = s.post("/admin/t/" + ref1, data=dict(csrf_token=tok(h), action="resolve", reply="رصيدك 30 يومًا"), follow_redirects=True).get_data(as_text=True)
 ok("تم الحفظ" in h and "رد على الموظف" in h and "بانتظار التقييم" in h, "leaves staff replies and sends for rating")
-h = c.post("/status", data=dict(csrf_token=t2, ref=ref1, email="ahmad@moh.gov.sa")).get_data(as_text=True)
+h = c.post("/status", data=dict(csrf_token=t2, ref=ref1, email=code1)).get_data(as_text=True)
 ok("رصيدك 30" in h and "بانتظار تقييمك" in h and "الإجازات" in h and "قيّم الرد" in h, "employee sees reply + rating form")
 # not resolved -> back to section
 h = c.post("/status", data=dict(csrf_token=t2, action="rate", ref=ref1, stars="2", resolved="0", comment="ما زال الرصيد خاطئ")).get_data(as_text=True)
@@ -106,7 +109,7 @@ row = sqlite3.connect(D + "/tickets.db").execute("SELECT status, rating FROM tic
 ok(row == ("in_progress", 2), "ticket back in progress with rating 2")
 r, h = get(s, "/admin/t/" + ref1)
 h = s.post("/admin/t/" + ref1, data=dict(csrf_token=tok(h), action="resolve", reply="تم تصحيح الرصيد إلى 30 يومًا"), follow_redirects=True).get_data(as_text=True)
-h = c.post("/status", data=dict(csrf_token=t2, ref=ref1, email="ahmad@moh.gov.sa")).get_data(as_text=True)
+h = c.post("/status", data=dict(csrf_token=t2, ref=ref1, email=code1)).get_data(as_text=True)
 h = c.post("/status", data=dict(csrf_token=t2, action="rate", ref=ref1, stars="5", resolved="1", comment="شكرًا")).get_data(as_text=True)
 ok("شكرًا لتقييمك" in h and "مغلقة" in h, "rated 5 -> closed")
 h = c.post("/status", data=dict(csrf_token=t2, action="rate", ref=ref1, stars="1", resolved="1")).get_data(as_text=True)
@@ -143,7 +146,7 @@ def jpg(gps=True, size=(800, 600)):
 r, h = get(c, "/ticket"); t = tok(h)
 d = dict(base, csrf_token=t); d["photos"] = [(jpg(), "a.jpg"), (jpg(), "b.jpg")]
 r = c.post("/ticket", data=d, content_type="multipart/form-data"); ok(r.status_code == 302, "ticket with 2 photos")
-r, h = get(c, "/ticket/done"); ref3 = re.search(r'<span class="ref">(\d+)</span>', h).group(1)
+r, h = get(c, "/ticket/done"); ref3, code3 = re.findall(r'<span class="ref">([^<]+)</span>', h)[:2]
 rows = sqlite3.connect(D + "/tickets.db").execute("SELECT token FROM attachments a JOIN tickets t ON t.id=a.ticket_id WHERE t.ref=?", (ref3,)).fetchall()
 ok(len(rows) == 2, "2 attachments stored")
 raw = open(D + "/uploads/" + rows[0][0] + ".jpg", "rb").read()
@@ -171,7 +174,7 @@ r, h = get(a, "/admin/t/" + ref3)
 r = a.post("/admin/t/" + ref3, data=dict(csrf_token=tok(h), action="save", reply="مرفق النموذج", photos=[(jpg(False), "form.jpg")]), content_type="multipart/form-data")
 ok(r.status_code == 302, "staff reply with photo")
 r, h = get(c, "/status")
-h = c.post("/status", data=dict(csrf_token=tok(h), ref="#" + ref3, email="ahmad@moh.gov.sa")).get_data(as_text=True)
+h = c.post("/status", data=dict(csrf_token=tok(h), ref="#" + ref3, email=code3.lower())).get_data(as_text=True)
 toks = re.findall(r'/status/f/([A-Za-z0-9_-]+)"', h)
 ok("صور مرفقة من القسم" in h and len(set(toks)) == 3, "employee sees section photo and own photos")
 ok(c.get("/status/f/" + toks[0]).status_code == 200, "employee can open photo after lookup")
@@ -239,4 +242,72 @@ ok("4.0 / 5" in h or "/ 5" in h, "average rating shown")
 r, h = get(a, "/admin/stats?from=2025-01-01&to=2026-12-31&channel=walkin"); ok(r.status_code == 200 and "<svg" in h, "long range weekly + channel filter")
 r = a.get("/admin/stats.csv"); ok("حسب الموظف المسؤول" in r.get_data(as_text=True), "stats csv")
 r, h = get(s2, "/admin/stats"); ok(r.status_code == 200 and "حسب القسم" not in h, "staff sees own section stats only")
+# ---------------- maintenance fixes
+import threading as _th
+con = sqlite3.connect(D + "/tickets.db")
+open_ref = con.execute("SELECT ref FROM tickets WHERE status='closed' LIMIT 1").fetchone()[0]
+r, h = get(a, "/admin/t/" + open_ref)
+r = a.post("/admin/t/" + open_ref, data=dict(csrf_token=tok(h), action="escalate", to_dept="3", reason="محاولة على مغلقة"))
+ok(r.status_code == 400, "cannot escalate a closed ticket")
+r = a.post("/admin/t/" + open_ref, data=dict(csrf_token=tok(h), action="take")); ok(r.status_code == 400, "cannot take a closed ticket")
+for u_ in ("/admin?dept=99999999999999999999&page=99999999999999999999", "/admin/stats?dept=99999999999999999999&from=0001-01-01&to=9999-12-31",
+           "/admin/stats?dept=%C2%B2"):
+    ok(a.get(u_).status_code == 200, "no crash: " + u_[:40])
+r, h = get(a, "/admin/users")
+ok(a.post("/admin/users", data=dict(csrf_token=tok(h), id="99999999999999999999", display_name="xxx", role="staff", dept_id="99999999999999999999")).status_code in (200, 400, 404), "users huge id no crash")
+bomb = _io.BytesIO(); _I.new("1", (9000, 9000)).save(bomb, "PNG"); bomb_n = len(bomb.getvalue()); bomb.seek(0)
+r, h = get(c, "/ticket"); d = dict(base, csrf_token=tok(h)); d["photos"] = [(bomb, "b.png")]
+r = c.post("/ticket", data=d, content_type="multipart/form-data"); ok(r.status_code == 400 and "8 ميجابايت" in r.get_data(as_text=True), "decompression bomb refused (%d bytes)" % bomb_n)
+before = con.execute("SELECT COUNT(*) FROM tickets").fetchone()[0]
+errs_ = []
+def mk(i):
+    try:
+        cl = A.app.test_client(); hh = cl.get("/ticket").get_data(as_text=True)
+        rr = cl.post("/ticket", data=dict(base, csrf_token=tok(hh), email="u%d@moh.gov.sa" % i))
+        if rr.status_code != 302: errs_.append(rr.status_code)
+    except Exception as e: errs_.append(repr(e))
+A._rl.clear()
+ths = [_th.Thread(target=mk, args=(i,)) for i in range(12)]; [t_.start() for t_ in ths]; [t_.join() for t_ in ths]
+refs_ = [r_[0] for r_ in sqlite3.connect(D + "/tickets.db").execute("SELECT ref FROM tickets WHERE ref NOT LIKE 'SHQ%'")]
+ok(not errs_ and len(refs_) == len(set(refs_)) and sqlite3.connect(D + "/tickets.db").execute("SELECT COUNT(*) FROM tickets").fetchone()[0] == before + 12, "12 concurrent tickets, unique numbers %s" % errs_[:3])
+mx = max(int(x) for x in refs_); r, h = get(a, "/admin/t/%d" % mx); a.post("/admin/t/%d/delete" % mx, data=dict(csrf_token=tok(h)))
+r, h = get(c, "/ticket"); c.post("/ticket", data=dict(base, csrf_token=tok(h), email="z@moh.gov.sa"))
+r, h = get(c, "/ticket/done"); ok(re.findall(r'<span class="ref">([^<]+)</span>', h)[0] == str(mx + 1), "number after delete is %d (not reused)" % (mx + 1))
+r, h = get(c, "/ticket"); c.post("/ticket", data=dict(base, csrf_token=tok(h), email="dbl@moh.gov.sa"))
+r, h = get(c, "/ticket/done"); dref, dcode = re.findall(r'<span class="ref">([^<]+)</span>', h)[:2]
+r, h = get(a, "/admin/t/" + dref); a.post("/admin/t/" + dref, data=dict(csrf_token=tok(h), action="resolve", reply="تم"))
+okn = []
+def rate_():
+    try:
+        with A.app.app_context():
+            con_ = A.db(); rr = con_.execute("SELECT * FROM tickets WHERE ref=?", (dref,)).fetchone(); okn.append(A.save_rating(con_, rr, 5, True, "", "online"))
+    except Exception as e: okn.append(repr(e))
+ths = [_th.Thread(target=rate_) for _ in range(5)]; [t_.start() for t_ in ths]; [t_.join() for t_ in ths]
+n_r = sqlite3.connect(D + "/tickets.db").execute("SELECT COUNT(*) FROM ratings r JOIN tickets t ON t.id=r.ticket_id WHERE t.ref=?", (dref,)).fetchone()[0]
+ok(n_r == 1 and okn.count(True) == 1, "5 simultaneous ratings -> stored once %s" % okn)
+r, h = get(c, "/ticket"); c.post("/ticket", data=dict(base, csrf_token=tok(h), email="late@moh.gov.sa"))
+r, h = get(c, "/ticket/done"); lref = re.findall(r'<span class="ref">([^<]+)</span>', h)[0]
+con = sqlite3.connect(D + "/tickets.db"); con.execute("UPDATE tickets SET due_at='2026-01-01T00:00:00Z' WHERE ref=?", (lref,)); con.commit()
+r, h = get(a, "/admin/t/" + lref); a.post("/admin/t/" + lref, data=dict(csrf_token=tok(h), action="escalate", to_dept="3", reason="تحويل بعد التأخر"))
+ok(sqlite3.connect(D + "/tickets.db").execute("SELECT sla_breached FROM tickets WHERE ref=?", (lref,)).fetchone()[0] == 1, "late leg remembered after escalation")
+r, h = get(a, "/admin/t/" + lref)
+h = a.post("/admin/t/" + lref, data=dict(csrf_token=tok(h), action="newcode"), follow_redirects=True).get_data(as_text=True)
+nc = re.search(r'رمز المتابعة الجديد: <b dir="ltr" class="k-code">([A-Z0-9]{3}-[A-Z0-9]{3})</b>', h); ok(bool(nc), "new code shown once to staff")
+r, h = get(c, "/status"); h = c.post("/status", data=dict(csrf_token=tok(h), ref=lref, email=nc.group(1))).get_data(as_text=True); ok("لا توجد تذكرة" not in h, "new code works")
+x1 = A.app.test_client(); x2 = A.app.test_client()
+for x_ in (x1, x2):
+    r, h = get(x_, "/admin/login"); x_.post("/admin/login", data=dict(csrf_token=tok(h), username="khaled.care", password="newcarepass1"))
+ok(x2.get("/admin").status_code == 200, "second session active")
+r, h = get(x1, "/admin/password"); x1.post("/admin/password", data=dict(csrf_token=tok(h), current="newcarepass1", new="anotherpass12", new2="anotherpass12"))
+ok(x1.get("/admin").status_code == 200 and x2.get("/admin").status_code == 302, "password change logs out other sessions only")
+y = A.app.test_client(); A._rl.clear()
+for _ in range(5):
+    r, h = get(y, "/admin/login"); y.post("/admin/login", data=dict(csrf_token=tok(h), username="khaled.care", password="wrong"))
+r, h = get(y, "/admin/login"); ok(y.post("/admin/login", data=dict(csrf_token=tok(h), username="khaled.care", password="anotherpass12")).status_code == 429, "account locked after 5 wrong passwords")
+r, h = get(y, "/admin/login"); ok(y.post("/admin/login", data=dict(csrf_token=tok(h), username="admin", password="adminpass123")).status_code == 302, "other accounts from the same IP still log in")
+r, h = get(c, "/en/ticket"); c.post("/en/ticket", data=dict(csrf_token=tok(h), req_type="feedback", topic="general", message="anonymous english note", anonymous="1", consent="1"))
+r, h = get(c, "/en/ticket/done"); aref = re.findall(r'<span class="ref">([^<]+)</span>', h)[0]
+ok(sqlite3.connect(D + "/tickets.db").execute("SELECT lang, kiosk_id FROM tickets WHERE ref=?", (aref,)).fetchone() == ("", None), "anonymous: language not stored")
+r, h = get(a, "/admin/t/" + aref); ok("لغة التقديم" not in h and "الوقت مخفي" in h, "anonymous: no language, date only")
+A.backup_daily(); ok(any(f_.startswith("tickets-") for f_ in os.listdir(D + "/backups")), "daily backup file written")
 print("ALL OK")

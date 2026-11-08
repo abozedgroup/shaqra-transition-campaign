@@ -6,8 +6,9 @@
   <h1 class="ok-h">{{ t.k_done_h }}</h1>
   <p class="k-lead">{{ t.k_your_no }}</p>
   <p class="k-bignum" dir="ltr">{{ ref }}</p>
-  {% if code %}<p class="k-lead">{{ t.dn_code }}</p><p class="k-bignum small" dir="ltr">{{ code[:3] }}-{{ code[3:] }}</p><p>{{ t.dn_code_keep|safe }}</p>
-  {% else %}<p class="k-lead">{{ t.k_go_to }} <b>{{ dept }}</b>{{ t.k_go_to2 }}</p><p>{{ t.k_after }}</p>{% endif %}
+  {% if anon %}<p class="k-lead">{{ t.dn_code }}</p><p class="k-bignum small" dir="ltr">{{ code[:3] }}-{{ code[3:] }}</p><p>{{ t.dn_code_keep|safe }}</p>
+  {% else %}<p class="k-lead">{{ t.k_go_to }} <b>{{ dept }}</b>{{ t.k_go_to2 }}</p><p>{{ t.k_after }}</p>
+  <p class="hint">{{ t.k_track_code }} <b dir="ltr" class="k-code">{{ code[:3] }}-{{ code[3:] }}</b></p>{% endif %}
   <a class="k-btn" href="{{ kpre }}">{{ t.k_finish }}</a>
   <p class="hint k-countdown" aria-live="off">{{ t.k_auto_back }}</p>
 </div>

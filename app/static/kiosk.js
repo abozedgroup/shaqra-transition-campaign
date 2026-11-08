@@ -10,6 +10,13 @@
     });
     reset();
   }
+  // no double submit (double tap)
+  [].forEach.call(document.querySelectorAll('form'), function (fm) {
+    fm.addEventListener('submit', function (e) {
+      if (fm.dataset.sent) { e.preventDefault(); return; }
+      fm.dataset.sent = '1'; setTimeout(function () { delete fm.dataset.sent; }, 8000);
+    });
+  });
   // request form: anonymous option only for complaints / suggestions / feedback
   var f = document.getElementById('kf');
   if (f) {

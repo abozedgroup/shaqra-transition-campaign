@@ -11,10 +11,8 @@
     {% if code %}
     <p>{{ t.dn_code }}</p>
     <p><span class="ref">{{ code[:3] }}-{{ code[3:] }}</span></p>
-    <p>{{ t.dn_code_keep|safe }}</p>
-    {% else %}
-    <p>{{ t.dn_keep|safe }}</p>
     {% endif %}
+    <p>{{ (t.dn_code_keep if anon else t.dn_keep)|safe }}</p>
     <p class="btns"><a class="btn solid" href="{{ u.status }}">{{ t.dn_track }}</a> <a class="btn" href="{{ u.home }}">{{ t.dn_home }}</a></p>
   </div>
 {% else %}

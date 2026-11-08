@@ -5,7 +5,8 @@
   {% include "_adminnav.html" %}
   <p><a href="/admin">← العودة للقائمة</a></p>
   {% set is_late = tk.status != 'closed' and tk.due_at and tk.due_at < now %}
-  <h1 class="h1s">تذكرة <span class="ref ref-sm">{{ tk.ref }}</span> <span class="badge st-{{ tk.status }}">{{ statuses.get(tk.status, tk.status) }}</span>{% if tk.channel == 'walkin' %} <span class="badge ch-walkin">حضوري</span>{% endif %}</h1>
+  <h1 class="h1s">تذكرة <span class="ref ref-sm">{{ tk.ref }}</span> <span class="badge st-{{ tk.status }}">{{ statuses.get(tk.status, tk.status) }}</span>{% if tk.channel == 'walkin' and not tk.anonymous %} <span class="badge ch-walkin">حضوري</span>{% endif %}</h1>
+  {% if new_code %}<div class="okmsg" role="status">رمز المتابعة الجديد: <b dir="ltr" class="k-code">{{ new_code[:3] }}-{{ new_code[3:] }}</b> – أبلغه للموظف الآن؛ لن يظهر مرة أخرى، وأُلغي الرمز السابق.</div>{% endif %}
   {% if saved %}<div class="okmsg"><b>تم الحفظ.</b></div>{% endif %}
   {% if err %}<div class="warn" role="alert">{{ err }}</div>{% endif %}
   <div class="grid2">
@@ -24,14 +25,16 @@
           {% else %}
           <dt>الاسم</dt><dd>{{ tk.name }}</dd>
           <dt>الرقم الوظيفي</dt><dd dir="ltr">{{ tk.emp_no }}</dd>
-          <dt>البريد</dt><dd dir="ltr"><a href="mailto:{{ tk.email }}">{{ tk.email }}</a></dd>
+          <dt>البريد</dt><dd><a href="mailto:{{ tk.email }}" dir="ltr">{{ tk.email }}</a> <small class="hint">(كتبه مقدّم الطلب ولم يُتحقق منه؛ تأكد من هويته قبل مشاركة معلومات حساسة)</small></dd>
           <dt>الجوال</dt><dd dir="ltr">{{ tk.mobile }}</dd>
           <dt>المنشأة</dt><dd>{{ tk.facility }}</dd>
           <dt>الفئة الوظيفية</dt><dd>{{ tk.job_cat }}</dd>
           {% endif %}
+          {% if not tk.anonymous %}
           <dt>القناة</dt><dd>{{ channels.get(tk.channel, tk.channel) }}</dd>
           <dt>لغة التقديم</dt><dd>{{ "English" if tk.lang=='en' else "العربية" }}</dd>
-          <dt>تاريخ التقديم</dt><dd>{{ tk.created_at|dt }} (توقيت الرياض)</dd>
+          {% endif %}
+          <dt>تاريخ التقديم</dt><dd>{% if tk.anonymous %}{{ tk.created_at|day }} <small class="hint">(الوقت مخفي لحماية هوية المقدّم)</small>{% else %}{{ tk.created_at|dt }} (توقيت الرياض){% endif %}</dd>
           <dt>آخر تحديث</dt><dd>{{ tk.updated_at|dt }}</dd>
         </dl>
         <h3>نص الطلب</h3><pre class="msgbox">{{ tk.message }}</pre>
@@ -120,7 +123,7 @@
         <h3>سجل التذكرة</h3>
         <ol class="timeline">
           {% for e in events %}
-          <li class="k-{{ e.kind }}"><div class="meta">{{ e.at|dt }} · {{ e.actor }} · <b>{{ kinds.get(e.kind, e.kind) }}</b>
+          <li class="k-{{ e.kind }}"><div class="meta">{{ e.at|day if (tk.anonymous and e.kind in ('create','rating')) else e.at|dt }} · {{ e.actor }} · <b>{{ kinds.get(e.kind, e.kind) }}</b>
             {% if e.kind=='escalate' %}: من {{ dept_names.get(e.from_dept, '—') }} إلى {{ dept_names.get(e.to_dept, '—') }}{% elif e.kind=='create' %}: إلى {{ dept_names.get(e.to_dept, '—') }}{% endif %}</div>
             {% if e.text %}<div class="txt">{{ e.text }}</div>{% endif %}</li>
           {% endfor %}
@@ -134,6 +137,14 @@
         </form>
       </div>
 
+      {% if not tk.anonymous and tk.status != 'closed' %}
+      <form method="post" action="/admin/t/{{ tk.ref }}" class="panel" data-confirm="إصدار رمز متابعة جديد يلغي الرمز الحالي. متابعة؟">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="newcode">
+        <h3>فقد الموظف رمز المتابعة؟</h3>
+        <p class="hint">تأكد من هويته (اتصل على جواله المسجّل أو قابله)، ثم أصدر رمزًا جديدًا وأبلغه به.</p>
+        <button class="btn" type="submit">إصدار رمز متابعة جديد</button>
+      </form>
+      {% endif %}
       {% if can_delete %}
       <form method="post" action="/admin/t/{{ tk.ref }}/delete" class="delform" data-confirm="حذف التذكرة وسجلها نهائيًا؟ لا يمكن التراجع.">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
