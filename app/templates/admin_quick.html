@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}تسجيل مراجع{% endblock %}
+{% macro e(k) %}{% if err[k] %}<p class="ferr" id="e-{{ k }}">{{ err[k] }}</p>{% endif %}{% endmacro %}
+{% block body %}
+<section class="s adm dp-page"><div class="wrap wide">
+  {% set anav='list' %}{% include "_adminnav.html" %}
+  <header class="tl-head"><h1>تسجيل مراجع حضر إليك مباشرة</h1></header>
+  <div class="next-step" role="note">لمن دخل عليك مباشرة دون جهاز الاستقبال: سجّله هنا في أقل من دقيقة لتُحسب زيارته في المؤشرات ويُتابَع طلبه.
+    تُسجَّل التذكرة في <b>{{ dept.name_ar if dept else 'العناية بالموظفين' }}</b> باسمك، بقناة «مباشر عند الموظف».</div>
+  {% if err %}<div class="warn" role="alert">راجع الحقول المعلّمة أدناه.</div>{% endif %}
+  <form class="card quick-form" method="post" action="/admin/quick" autocomplete="off" novalidate>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <fieldset class="q-out">
+      <legend>ماذا تم مع المراجع؟</legend>
+      {% for k, label in outcomes.items() %}
+      <label class="q-opt"><input type="radio" name="outcome" value="{{ k }}" {% if v.outcome == k %}checked{% endif %} required>
+        <span><b>{{ label }}</b><small>{% if k == 'done' %}تُنهى التذكرة فورًا ويُدعى للتقييم{% elif k == 'follow' %}تبقى مفتوحة باسمك حتى تنهيها{% else %}تنتقل بعد الحفظ إلى حجز الموعد{% endif %}</small></span></label>
+      {% endfor %}
+      {{ e('outcome') }}
+    </fieldset>
+    <div class="q-grid">
+      <div class="field"><label for="q-name">اسم المراجع</label><input type="text" id="q-name" name="name" value="{{ v.name or '' }}" maxlength="80" required autofocus {% if err.name %}aria-invalid="true" aria-describedby="e-name"{% endif %}>{{ e('name') }}</div>
+      <div class="field"><label for="q-mobile">الجوال <span class="opt">(اختياري – يتيح له التقييم من جهاز الاستقبال)</span></label><input type="tel" id="q-mobile" name="mobile" value="{{ v.mobile or '' }}" inputmode="tel" dir="ltr" class="ltr-field" placeholder="05xxxxxxxx" maxlength="20" {% if err.mobile %}aria-invalid="true" aria-describedby="e-mobile"{% endif %}>{{ e('mobile') }}</div>
+      <div class="field"><label for="q-emp">الرقم الوظيفي <span class="opt">(اختياري)</span></label><input type="text" id="q-emp" name="emp_no" value="{{ v.emp_no or '' }}" inputmode="numeric" dir="ltr" class="ltr-field" maxlength="20" {% if err.emp_no %}aria-invalid="true" aria-describedby="e-emp_no"{% endif %}>{{ e('emp_no') }}</div>
+      <div class="field"><label for="q-email">البريد الوظيفي <span class="opt">(اختياري)</span></label><input id="q-email" name="email" type="email" value="{{ v.email or '' }}" dir="ltr" class="ltr-field" placeholder="name@moh.gov.sa" maxlength="120" {% if err.email %}aria-invalid="true" aria-describedby="e-email"{% endif %}>{{ e('email') }}</div>
+      <div class="field"><label for="q-topic">الموضوع</label><select id="q-topic" name="topic" required>
+        {% for k, label in topics %}<option value="{{ k }}" {% if v.topic == k %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>{{ e('topic') }}</div>
+    </div>
+    <div class="field"><label for="q-msg">سبب الزيارة <span class="opt">(باختصار)</span></label><textarea id="q-msg" name="message" rows="3" maxlength="3000" required {% if err.message %}aria-invalid="true" aria-describedby="e-message"{% endif %}>{{ v.message or '' }}</textarea>{{ e('message') }}</div>
+    <div class="field"><label for="q-reply">ما تم <span class="opt">(اختياري – يظهر للمراجع عند متابعة طلبه إن أُنهيت الخدمة)</span></label><textarea id="q-reply" name="reply" rows="2" maxlength="3000" placeholder="مثال: زُوّد بتعريف بالراتب.">{{ v.reply or '' }}</textarea></div>
+    <div class="q-actions"><button class="btn solid" type="submit">حفظ وتسجيل</button> <a class="btn" href="/admin">إلغاء</a></div>
+  </form>
+</div></section>
+{% endblock %}
+{% block scripts %}<script src="/app-static/admin.js"></script>{% endblock %}

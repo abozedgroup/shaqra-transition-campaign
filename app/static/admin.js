@@ -134,4 +134,87 @@
     });
     if (ta.form) ta.form.addEventListener('submit', function () { try { store.removeItem(key); } catch (e) {} });
   });
+
+  // ---- bulk actions on the ticket list
+  var bulk = document.querySelector('form[data-bulk]');
+  if (bulk) {
+    var boxes = [].slice.call(document.querySelectorAll('input[name=ids][form=bulk]'));
+    var all = document.querySelector('[data-bulk-all]');
+    var act = bulk.querySelector('[data-bulk-action]');
+    var sync = function () {
+      var n = boxes.filter(function (b) { return b.checked; }).length;
+      bulk.hidden = n === 0;
+      bulk.querySelector('.bulk-n').textContent = n + ' محددة';
+      if (all) { all.checked = n > 0 && n === boxes.length; all.indeterminate = n > 0 && n < boxes.length; }
+      [].forEach.call(bulk.querySelectorAll('[data-bulk-for]'), function (el) {
+        var on = el.getAttribute('data-bulk-for') === act.value;
+        el.hidden = !on; el.required = on && el.tagName === 'INPUT';
+      });
+    };
+    boxes.forEach(function (b) { b.addEventListener('change', sync); });
+    if (all) all.addEventListener('change', function () { boxes.forEach(function (b) { b.checked = all.checked; }); sync(); });
+    act.addEventListener('change', sync);
+    bulk.querySelector('[data-bulk-clear]').addEventListener('click', function () { boxes.forEach(function (b) { b.checked = false; }); sync(); });
+    sync();
+  }
+
+  // ---- new-work alert: poll the counters, update the badges and the tab title, chime on something new
+  var nav = document.querySelector('nav[data-pulse]');
+  if (nav && window.fetch) {
+    var st = {};
+    try { st = JSON.parse(nav.getAttribute('data-pulse') || '{}'); } catch (e) {}
+    var store2 = null; try { store2 = window.localStorage; } catch (e) {}
+    var soundOn = function () { try { return !store2 || store2.getItem('shq-sound') !== 'off'; } catch (e) { return true; } };
+    var tbtn = nav.querySelector('[data-sound-toggle]');
+    var paint = function () { if (tbtn) { var on = soundOn(); tbtn.setAttribute('aria-pressed', on ? 'true' : 'false'); tbtn.textContent = on ? '🔔 التنبيه' : '🔕 التنبيه'; } };
+    if (tbtn) tbtn.addEventListener('click', function () { try { store2.setItem('shq-sound', soundOn() ? 'off' : 'on'); } catch (e) {} paint(); if (soundOn()) chime(); });
+    paint();
+    var ctx = null;
+    var chime = function () {
+      if (!soundOn()) return;
+      try {
+        ctx = ctx || new (window.AudioContext || window.webkitAudioContext)();
+        [0, 0.18].forEach(function (d, i) {
+          var o = ctx.createOscillator(), g = ctx.createGain();
+          o.frequency.value = i ? 1046 : 784; o.type = 'sine';
+          g.gain.setValueAtTime(0.0001, ctx.currentTime + d);
+          g.gain.exponentialRampToValueAtTime(0.25, ctx.currentTime + d + 0.02);
+          g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + d + 0.35);
+          o.connect(g); g.connect(ctx.destination); o.start(ctx.currentTime + d); o.stop(ctx.currentTime + d + 0.4);
+        });
+      } catch (e) {}
+    };
+    var baseTitle = document.title;
+    var toast = function (text, href) {
+      var t = document.createElement('a');
+      t.className = 'pulse-toast'; t.href = href; t.setAttribute('role', 'status'); t.textContent = text;
+      document.body.appendChild(t);
+      setTimeout(function () { t.classList.add('out'); setTimeout(function () { t.remove(); }, 600); }, 12000);
+    };
+    var show = function (p) {
+      ['act', 'wait'].forEach(function (k) {
+        var el = nav.querySelector('[data-nb=' + k + ']');
+        if (el) { el.textContent = p[k]; el.hidden = !p[k]; }
+      });
+      var n = (p.act || 0) + (p.wait || 0);
+      document.title = (n ? '(' + n + ') ' : '') + baseTitle;
+    };
+    show(st);
+    var poll = function () {
+      fetch('/admin/pulse', { credentials: 'same-origin', cache: 'no-store' }).then(function (r) {
+        if (r.status === 401) { window.location.href = '/admin/login'; return null; }
+        return r.ok ? r.json() : null;
+      }).then(function (p) {
+        if (!p) return;
+        var newT = p.t > (st.t || 0) || p.act > (st.act || 0);
+        var newA = p.a > (st.a || 0) || p.wait > (st.wait || 0);
+        if (newT) toast('وصلت تذكرة جديدة تحتاج إجراء – اضغط لعرضها', '/admin?status=act');
+        if (newA) toast('حضر مراجع وينتظر الآن – اضغط لعرض الانتظار', '/admin/queue');
+        if (newT || newA) chime();
+        st = p; show(p);
+      }).catch(function () {});
+    };
+    setInterval(function () { if (!document.hidden) poll(); }, 30000);
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) poll(); });
+  }
 })();

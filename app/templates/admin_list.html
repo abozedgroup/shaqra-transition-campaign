@@ -14,10 +14,12 @@
       <input type="text" id="qref" name="ref" inputmode="numeric" dir="ltr" class="ltr-field" placeholder="1024" autocomplete="off" required>
       <button class="btn solid" type="submit">فتح</button>
     </form>
+    <a class="btn solid quick-btn" href="/admin/quick">+ تسجيل مراجع</a>
   </header>
 
   {% if not me_admin and not my_dept %}<div class="warn">حسابك غير مرتبط بقسم. اطلب من المشرف العام ربطه بقسمك.</div>{% endif %}
   {% if notfound %}<div class="warn">لا توجد تذكرة برقم <b dir="ltr">{{ notfound }}</b> ضمن صلاحياتك.</div>{% endif %}
+  {% if bulk_msg %}<div class="{{ 'okmsg' if bulk_msg[0] == 'ok' else 'warn' }}" role="status">{{ bulk_msg[1] }}</div>{% endif %}
   {% if moved %}<div class="okmsg">تمت إحالة التذكرة <b dir="ltr">{{ moved }}</b> إلى القسم المختص، ولم تعد ضمن قائمة قسمك.</div>{% endif %}
 
   {# ---------- status tabs (replace the number cards) ---------- #}
@@ -55,14 +57,35 @@
   </div>
 
   {# ---------- the list ---------- #}
+  {% set can_bulk = cur not in ('resolved', 'closed') %}
+  {% if can_bulk and rows %}
+  <form id="bulk" class="bulk-bar" method="post" action="/admin/bulk" data-bulk data-confirm="تنفيذ الإجراء على التذاكر المحددة؟" hidden>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="back" value="{{ qs }}">
+    <b class="bulk-n" aria-live="polite">0 محددة</b>
+    <select name="action" aria-label="الإجراء" data-bulk-action>
+      <option value="take">استلامها باسمي</option>
+      <option value="refer">إحالتها إلى قسم</option>
+      <option value="close">إغلاقها دون تقييم</option>
+    </select>
+    <select name="to_dept" aria-label="القسم" data-bulk-for="refer" hidden>{% for d in active_depts %}<option value="{{ d.id }}">{{ d.name_ar }}</option>{% endfor %}</select>
+    <input type="text" name="reason" maxlength="2000" placeholder="سبب الإحالة" aria-label="سبب الإحالة" data-bulk-for="refer" hidden>
+    <input type="text" name="close_note" maxlength="1000" placeholder="سبب الإغلاق (مثل: مكررة)" aria-label="سبب الإغلاق" data-bulk-for="close" hidden>
+    <button class="btn solid" type="submit">تنفيذ</button>
+    <button class="btn" type="button" data-bulk-clear>إلغاء التحديد</button>
+  </form>
+  {% endif %}
+  {% if can_bulk and rows %}<label class="tl-all"><input type="checkbox" data-bulk-all> تحديد كل التذاكر المفتوحة في هذه الصفحة (لإجراء جماعي)</label>{% endif %}
   <div class="tl-list" role="list">
     {% for r in rows %}
     {% set is_open = r.status in ('new','escalated','in_progress') %}
     {% set is_late = is_open and r.due_at and r.due_at < now %}
     {% set ap = appts.get(r.id) %}
-    <a class="tl-row {{ 'late' if is_late }} s-{{ r.status }}" href="/admin/t/{{ r.ref }}" role="listitem">
+    <div class="tl-item" role="listitem">
+    {% if can_bulk %}<label class="tl-sel">{% if is_open %}<input type="checkbox" name="ids" value="{{ r.ref }}" form="bulk" aria-label="تحديد التذكرة {{ r.ref }}">{% endif %}</label>{% endif %}
+    <a class="tl-row {{ 'late' if is_late }} s-{{ r.status }}" href="/admin/t/{{ r.ref }}">
       <span class="tl-ref"><b dir="ltr">{{ r.ref }}</b>
-        {% if r.channel == 'walkin' and not r.anonymous %}<span class="badge ch-walkin">حضوري</span>{% endif %}</span>
+        {% if r.channel == 'walkin' and not r.anonymous %}<span class="badge ch-walkin">حضوري</span>{% endif %}{% if r.channel == 'direct' %}<span class="badge ch-walkin" title="سُجّل مباشرة عند الموظف">مباشر</span>{% endif %}
+        {% if not me_admin and me.dept_id and r.dept_id != me.dept_id %}<span class="badge ch-shared" title="لدى العناية بالموظفين وموضوعها من اختصاص قسمك">مشتركة</span>{% endif %}</span>
       <span class="tl-main">
         <span class="tl-who">{% if r.anonymous %}<span class="anon-tag">مجهول</span>{% else %}{{ r.name }}{% endif %}
           <span class="tl-topic">· {{ topic_names.get(r.topic, '—') }}{% if r.req_type == 'feedback' %} · {{ types.get(r.req_type) }}{% endif %}</span></span>
@@ -89,6 +112,7 @@
         {% if me_admin %}<small class="tl-dept">{{ dept_names.get(r.dept_id, '—') }}</small>{% endif %}
       </span>
     </a>
+    </div>
     {% else %}
     <div class="tl-empty">{% if cur in ('open','act') %}لا توجد تذاكر تحتاج عملًا الآن. 👍{% else %}لا توجد تذاكر هنا.{% endif %}</div>
     {% endfor %}

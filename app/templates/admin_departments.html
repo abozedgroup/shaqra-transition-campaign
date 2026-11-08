@@ -32,6 +32,23 @@
     <p class="hint">بعد الإضافة أضف موظفًا للقسم من صفحة «الحسابات»، واضبط مكان مواعيده من «المواعيد والانتظار».</p>
   </details>
 
+  <details class="card add-card" id="holidays" {% if hol_msg %}open{% endif %}>
+    <summary class="card-h">العطل الرسمية{% if holidays %} <span class="n">{{ holidays|length }} يومًا</span>{% endif %}</summary>
+    {% if hol_msg %}<div class="{{ 'okmsg' if hol_msg[0] == 'ok' else 'warn' }}" role="status">{{ hol_msg[1] }}</div>{% endif %}
+    <p class="hint">أيام العطل لا تُحسب في مهل التذاكر ولا مهلة التقييم، ولا تُتاح فيها مواعيد. تُطبّق على المهل التي تُحسب بعد إضافتها، فأضفها مبكرًا.</p>
+    <form method="post" action="/admin/holidays" class="rowform">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="field"><label for="hn">اسم العطلة</label><input type="text" id="hn" name="name" maxlength="60" placeholder="إجازة عيد الفطر" required></div>
+      <div class="field"><label for="hf">من</label><input id="hf" type="date" name="from" required></div>
+      <div class="field"><label for="ht">إلى <span class="opt">(ليوم واحد اتركه فارغًا)</span></label><input id="ht" type="date" name="to"></div>
+      <button class="btn solid" type="submit">إضافة</button>
+    </form>
+    {% if holidays %}
+    <ul class="hol-list">{% for h in holidays %}<li><span dir="ltr">{{ h.day }}</span> – {{ h.name }}
+      <form method="post" action="/admin/holidays" class="inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="delete"><input type="hidden" name="day" value="{{ h.day }}"><button class="linkbtn" type="submit" aria-label="حذف {{ h.day }}">حذف</button></form></li>{% endfor %}</ul>
+    {% endif %}
+  </details>
+
   <div class="dp-list">
     {% for d in depts %}{% set o = opens.get(d.id, (0, 0)) %}{% set people = staff.get(d.id, []) %}
     <article class="dp-card {{ 'off' if not d.active }} {{ 'nostaff' if d.active and not people }}" id="d-{{ d.id }}">

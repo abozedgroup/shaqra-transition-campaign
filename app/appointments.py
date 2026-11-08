@@ -115,7 +115,7 @@ def valid_hm(s):
 
 
 def is_workday(d):
-    return d.weekday() not in (4, 5)  # Friday, Saturday
+    return not core.is_off(d)  # Friday, Saturday and official holidays
 
 
 AR_DAYS = ["الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت", "الأحد"]

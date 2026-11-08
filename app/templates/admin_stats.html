@@ -35,7 +35,7 @@
   {# ---------- summary in words ---------- #}
   <div class="next-step" role="note">
     <b>الخلاصة ({{ s.f.from }} – {{ s.f.to }}):</b>
-    استلمنا <b>{{ T.n }}</b> طلبًا{% if T.walkin %} (منها {{ T.walkin }} حضوري){% endif %}، وأُغلق <b>{{ T.closed }}</b>، وما زال <b>{{ T.open }}</b> مفتوحًا.
+    استلمنا <b>{{ T.n }}</b> طلبًا{% if T.walkin or T.direct %} (منها {{ T.walkin + T.direct }} حضوري{% if T.direct %}، {{ T.direct }} مباشرة عند الموظف{% endif %}){% endif %}، وأُغلق <b>{{ T.closed }}</b>، وما زال <b>{{ T.open }}</b> مفتوحًا.
     {% if T.sla is not none %}الالتزام بالمهلة <b>{{ T.sla }}%</b>، {% endif %}ومتوسط الإنجاز <b>{{ T.resolve|dur }}</b>.
     {% if T.nrat %}نسبة الرضا <b>{{ T.csat }}%</b> من {{ T.nrat }} تقييمًا.{% else %}لا توجد تقييمات بعد.{% endif %}
     {% set warn = [] %}
@@ -106,7 +106,8 @@
         <div><dt>نسبة التصعيد</dt><dd>{{ num(T.esc_pct, '%') }} <small>({{ T.esc }})</small></dd></div>
         <div><dt>نسبة من قيّم</dt><dd>{{ num(T.resp, '%') }}</dd></div>
         <div><dt>أفاد بأن طلبه لم يُحل</dt><dd class="{{ 'late-txt' if T.unresolved }}">{{ T.unresolved }}</dd></div>
-        <div><dt>حضوري</dt><dd>{{ T.walkin }}</dd></div>
+        <div><dt>حضوري عبر جهاز الاستقبال</dt><dd>{{ T.walkin }}</dd></div>
+        <div><dt>مباشر عند الموظف</dt><dd>{{ T.direct }}</dd></div>
         <div><dt>دون إفصاح</dt><dd>{{ T.anon }}</dd></div>
       </dl>
     </div>

@@ -19,8 +19,9 @@ from datetime import datetime, timedelta, timezone
 
 from i18n import (ERR, FACILITY_OPTS, JOB_OPTS, STATUSES as STATUSES_I18N, T, TYPES as TYPES_I18N,
                   TYPE_HELP)
-from flask import (Flask, Response, abort, g, redirect, render_template,
+from flask import (Flask, Response, abort, g, jsonify, redirect, render_template,
                    request, send_from_directory, session, url_for)
+from flask.sessions import SecureCookieSessionInterface
 
 # ---------------------------------------------------------------- config
 DB_PATH = os.environ.get("DB_PATH", "/data/tickets.db")
@@ -56,7 +57,7 @@ PHOTO_MAX_SIDE = 2000
 STATUSES = {"new": "جديدة", "escalated": "محالة", "in_progress": "قيد المعالجة",
             "resolved": "تم الرد – بانتظار التقييم", "closed": "مغلقة"}
 RATE_WINDOW_DAYS = 5  # working days the employee has to rate before the ticket closes on its own
-CHANNELS = {"online": "إلكتروني", "walkin": "حضوري"}
+CHANNELS = {"online": "إلكتروني", "walkin": "حضوري (جهاز الاستقبال)", "direct": "مباشر عند الموظف"}
 CLOSE_REASONS = {"rated": "بعد تقييم الموظف", "auto": "تلقائيًا بعد انتهاء مهلة التقييم",
                  "staff": "أغلقها القسم دون تقييم", "": "—"}
 KIOSK_COOKIE = "shq_k"
@@ -104,6 +105,17 @@ app.config.update(
     PERMANENT_SESSION_LIFETIME=timedelta(seconds=ADMIN_SESSION_SECONDS),
     JSON_AS_ASCII=False,
 )
+
+
+class _SessionIface(SecureCookieSessionInterface):
+    """Background polling (/admin/pulse) must not keep an idle session alive: only real use extends it."""
+    def should_set_cookie(self, app_, session_):
+        if request.path == "/admin/pulse" and not session_.modified:
+            return False
+        return super().should_set_cookie(app_, session_)
+
+
+app.session_interface = _SessionIface()
 logging.getLogger("werkzeug").setLevel(logging.ERROR)
 log = logging.getLogger("shq")
 log.setLevel(logging.INFO)
@@ -219,6 +231,10 @@ CREATE TABLE IF NOT EXISTS reply_templates(
   created_by TEXT NOT NULL DEFAULT '',
   updated_at TEXT NOT NULL DEFAULT ''
 );
+CREATE TABLE IF NOT EXISTS holidays(
+  day TEXT PRIMARY KEY,
+  name TEXT NOT NULL DEFAULT ''
+);
 CREATE TABLE IF NOT EXISTS counters(
   name TEXT PRIMARY KEY,
   value INTEGER NOT NULL
@@ -298,6 +314,7 @@ def init_db():
             "SELECT id, created_at, status FROM tickets WHERE dept_id IS NULL").fetchall():
         due = add_workdays(created, care[1]) if status in OPEN_STATUSES else ""
         con.execute("UPDATE tickets SET dept_id=?, topic=?, due_at=? WHERE id=?", (care[0], GENERAL_TOPIC, due, tid))
+    load_holidays(con)
     for hook in DB_HOOKS:
         hook(con)
     con.commit()
@@ -314,18 +331,37 @@ def day_end(iso):
     return t.replace(hour=23, minute=59, second=0).astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+HOLIDAYS = set()  # official holidays, "YYYY-MM-DD" (Riyadh); one app process, reloaded after every change
+
+
+def load_holidays(con):
+    days = {r[0] for r in con.execute("SELECT day FROM holidays")}
+    HOLIDAYS.clear()
+    HOLIDAYS.update(days)
+
+
+def is_off(d):
+    """Friday, Saturday or an official holiday (d: date or datetime, Riyadh)."""
+    return d.weekday() in (4, 5) or d.strftime("%Y-%m-%d") in HOLIDAYS
+
+
 def add_workdays(start_iso, days):
-    """Deadline after `days` working days (Sunday–Thursday, Riyadh time), as a UTC ISO string."""
+    """Deadline after `days` working days (Sunday–Thursday, excluding official holidays, Riyadh time),
+    as a UTC ISO string."""
     try:
         d = datetime.strptime(start_iso, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).astimezone(RIYADH)
     except Exception:
         d = datetime.now(RIYADH)
     left = max(0, int(days))
-    while d.weekday() in (4, 5):  # submitted on Friday/Saturday: the clock starts Sunday morning
+    for _ in range(400):  # submitted on a weekend or holiday: the clock starts the next working morning
+        if not is_off(d):
+            break
         d = (d + timedelta(days=1)).replace(hour=8, minute=0, second=0)
-    while left > 0:
+    for _ in range(400 + left):
+        if left <= 0:
+            break
         d += timedelta(days=1)
-        if d.weekday() not in (4, 5):
+        if not is_off(d):
             left -= 1
     return d.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -1160,8 +1196,9 @@ def kiosk_rate():
             key = norm_code(clean(request.form.get("key"), 20))
             if REF_RE.match(ref):
                 r = con.execute(cols + "WHERE ref=?", (ref,)).fetchone()
+                # last 4 mobile digits, or the follow-up code (anonymous tickets, visitors with no mobile on file)
                 if r and ((not r["anonymous"] and len(key) == 4 and r["mobile"].endswith(key))
-                          or (r["anonymous"] and r["follow_hash"] == follow_hash(ref, key))):
+                          or (len(key) > 4 and r["follow_hash"] == follow_hash(ref, key))):
                     row = r
             if not row:
                 error = T[lang]["k_rate_notfound"]
@@ -1254,17 +1291,25 @@ def inject_staff():
     u = current_user()
     if not u:
         return dict(me=u, me_admin=False, roles=ROLES)
+    p = pulse(u)
+    return dict(me=u, me_admin=is_admin_user(u), roles=ROLES, nav_act=p["act"], nav_wait=p["wait"], nav_pulse=p)
+
+
+def pulse(u):
+    """Counters for the navigation badges and the new-work alert: tickets needing action, visitors waiting now,
+    and the newest of each (so the page can tell that something new arrived)."""
     con = db()
     vw, va = _visible(u)
-    n_act = con.execute("SELECT COUNT(*) FROM tickets WHERE " + " AND ".join(vw + ["status IN ('new','escalated')"]),
-                        va).fetchone()[0]
+    act, top_t = con.execute("SELECT COUNT(*), COALESCE(MAX(id), 0) FROM tickets WHERE "
+                             + " AND ".join(vw + ["status IN ('new','escalated')"]), va).fetchone()
     today = datetime.now(RIYADH).strftime("%Y-%m-%d")
     qw = ["a.status='checked_in'", "a.checked_in_at LIKE ?"]
     qa = [today + "%"]
     if not is_admin_user(u):
         qw.append("a.dept_id=?"); qa.append(u["dept_id"] or -1)
-    n_wait = con.execute("SELECT COUNT(*) FROM appointments a WHERE " + " AND ".join(qw), qa).fetchone()[0]
-    return dict(me=u, me_admin=is_admin_user(u), roles=ROLES, nav_act=n_act, nav_wait=n_wait)
+    wait, top_a = con.execute("SELECT COUNT(*), COALESCE(MAX(a.id), 0) FROM appointments a WHERE " + " AND ".join(qw),
+                              qa).fetchone()
+    return {"act": act, "wait": wait, "t": top_t, "a": top_a}
 
 
 @app.route("/admin/login", methods=["GET", "POST"])
@@ -1341,11 +1386,40 @@ def admin_password():
 
 
 # ---------------------------------------------------------------- ticket list
+def _shared_scope(u):
+    """(care section id, this person's section key): tickets still at Employee Care whose topic is this person's
+    section are shared with that section, so either team can handle them. Complaints are never shared."""
+    if "shq_scope" not in g:
+        care = dept_by_key(INTAKE_KEY)
+        mine = dept_by_id(u["dept_id"]) if u and u["dept_id"] else None
+        shared = care and mine and mine["id"] != care["id"] and mine["key"] != COMPLAINTS_KEY
+        g.shq_scope = (care["id"], mine["key"]) if shared else (None, None)
+    return g.shq_scope
+
+
 def _visible(u):
-    """SQL restriction to the tickets this staff member may see."""
+    """SQL restriction to the tickets this staff member may see: their section's, plus tickets at Employee Care
+    whose topic is their section."""
     if is_admin_user(u):
         return [], []
+    care_id, key = _shared_scope(u)
+    if care_id:
+        return ["(dept_id=? OR (dept_id=? AND topic=?))"], [u["dept_id"] or -1, care_id, key]
     return ["dept_id=?"], [u["dept_id"] or -1]
+
+
+def can_see(u, row):
+    if is_admin_user(u):
+        return True
+    if u["dept_id"] and row["dept_id"] == u["dept_id"]:
+        return True
+    care_id, key = _shared_scope(u)
+    return bool(care_id) and row["dept_id"] == care_id and row["topic"] == key
+
+
+def is_shared_view(u, row):
+    """This person sees the ticket because its topic is their section (it is still at Employee Care)."""
+    return not is_admin_user(u) and row["dept_id"] != u["dept_id"] and can_see(u, row)
 
 
 def _overdue_sql():
@@ -1416,7 +1490,7 @@ def admin_open():
     if REF_RE.match(ref):
         r = db().execute("SELECT * FROM tickets WHERE ref=?", (ref,)).fetchone()
         u = current_user()
-        if r and (is_admin_user(u) or r["dept_id"] == u["dept_id"]):
+        if r and can_see(u, r):
             return redirect(url_for("admin_ticket", ref=ref))
     return redirect(url_for("admin_list", notfound=ref[:20]))
 
@@ -1478,6 +1552,7 @@ def admin_list():
                            dept_names={d["id"]: d["name_ar"] for d in depts}, users=users, appts=appts,
                            topic_names=_topic_names(), summary=summary, now=now, my_dept=my_dept,
                            moved=clean(request.args.get("moved"), 30), channels=CHANNELS,
+                           bulk_msg=session.pop("bulk_msg", None), active_depts=all_depts(True),
                            notfound=clean(request.args.get("notfound"), 20),
                            adv_open=any(f[k] for k in ("dept", "topic", "type", "channel", "facility", "mine")))
 
@@ -1494,9 +1569,118 @@ def _load_ticket(ref, u):
     if not REF_RE.match(ref):
         abort(404)
     row = db().execute("SELECT * FROM tickets WHERE ref=?", (ref,)).fetchone()
-    if not row or not (is_admin_user(u) or (u["dept_id"] and row["dept_id"] == u["dept_id"])):
+    if not row or not can_see(u, row):
         abort(404)
     return row
+
+
+@app.route("/admin/holidays", methods=["POST"])
+@admin_only
+def admin_holidays():
+    check_csrf()
+    con = db()
+    if request.form.get("action") == "delete":
+        con.execute("DELETE FROM holidays WHERE day=?", (clean(request.form.get("day"), 10),))
+        msg = ["ok", "حُذفت العطلة."]
+    else:
+        name = clean(request.form.get("name"), 60)
+        try:
+            d1 = datetime.strptime(request.form.get("from", ""), "%Y-%m-%d").date()
+            d2 = datetime.strptime(request.form.get("to") or request.form.get("from", ""), "%Y-%m-%d").date()
+        except ValueError:
+            d1 = d2 = None
+        if not d1 or d2 < d1 or (d2 - d1).days > 30:
+            msg = ["warn", "اختر تاريخ البداية والنهاية (30 يومًا كحد أقصى)."]
+        elif len(name) < 2:
+            msg = ["warn", "اكتب اسم العطلة (مثل: إجازة عيد الفطر)."]
+        else:
+            n = 0
+            while d1 <= d2:
+                con.execute("INSERT OR REPLACE INTO holidays(day, name) VALUES(?,?)", (d1.isoformat(), name))
+                d1 += timedelta(days=1); n += 1
+            msg = ["ok", "أُضيفت «%s» (%d يومًا)." % (name, n)]
+    con.commit()
+    load_holidays(con)
+    session["hol_msg"] = msg
+    return redirect("/admin/departments#holidays")
+
+
+@app.route("/admin/pulse")
+def admin_pulse():
+    u = current_user()
+    if not u:
+        return jsonify({"login": True}), 401
+    resp = jsonify(pulse(u))
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
+
+
+BULK_MAX = 100
+
+
+@app.route("/admin/bulk", methods=["POST"])
+@login_required
+def admin_bulk():
+    """One action on several selected tickets: take them, refer them to a section, or close them with a reason."""
+    check_csrf()
+    u = current_user()
+    con = db()
+    back = "/admin" + ("?" + request.form.get("back", "") if request.form.get("back") else "")
+    if "\n" in back or "\r" in back or "//" in back or "\\" in back:
+        back = "/admin"
+    refs = [norm_ref(x) for x in request.form.getlist("ids")[:BULK_MAX]]
+    rows = [r for r in (con.execute("SELECT * FROM tickets WHERE ref=?", (x,)).fetchone() for x in refs if REF_RE.match(x))
+            if r and can_see(u, r) and r["status"] in OPEN_STATUSES]
+    action = request.form.get("action", "")
+    if not rows:
+        session["bulk_msg"] = ["warn", "لم تحدد تذاكر مفتوحة."]
+        return redirect(back)
+    ts = now_utc()
+    actor = "%s (%s)" % (u["display_name"], u["username"])
+    if action == "take":
+        if not u["id"]:
+            session["bulk_msg"] = ["warn", "الحساب الرئيسي لا تُسند إليه تذاكر؛ استخدم حسابك الشخصي."]
+            return redirect(back)
+        for r in rows:
+            st = "in_progress" if r["status"] in ("new", "escalated") else r["status"]
+            con.execute("UPDATE tickets SET assigned_user_id=?, status=?, updated_at=? WHERE id=?", (u["id"], st, ts, r["id"]))
+            log_event(con, r["id"], actor, "assign", "استلم التذكرة (تحديد جماعي)")
+        msg = "استلمت %d تذكرة." % len(rows)
+    elif action == "refer":
+        d = dept_by_id(as_id(request.form.get("to_dept")))
+        reason = clean(request.form.get("reason"), 2000)
+        if not d or not d["active"]:
+            session["bulk_msg"] = ["warn", "اختر القسم الذي ستُحال إليه التذاكر."]
+            return redirect(back)
+        if len(reason) < 5:
+            session["bulk_msg"] = ["warn", "اكتب سبب الإحالة ليعرف القسم المستلم ما المطلوب."]
+            return redirect(back)
+        rows = [r for r in rows if r["dept_id"] != d["id"]]
+        for r in rows:
+            con.execute("UPDATE tickets SET dept_id=?, status='escalated', due_at=?, assigned_user_id=NULL, updated_at=?, "
+                        "sla_breached=MAX(sla_breached, ?) WHERE id=?",
+                        (d["id"], add_workdays(ts, d["sla_days"]), ts, 1 if leg_was_late(r, ts) else 0, r["id"]))
+            log_event(con, r["id"], actor, "escalate", reason, r["dept_id"], d["id"])
+            if APPT_FOLLOW:
+                APPT_FOLLOW(con, r["id"], "escalate", d["id"], actor)
+        msg = "أُحيلت %d تذكرة إلى %s." % (len(rows), d["name_ar"])
+    elif action == "close":
+        reason = clean(request.form.get("close_note"), 1000)
+        if len(reason) < 3:
+            session["bulk_msg"] = ["warn", "اكتب سبب الإغلاق دون تقييم (مثل: مكررة)."]
+            return redirect(back)
+        for r in rows:
+            con.execute("UPDATE tickets SET status='closed', closed_at=?, close_reason='staff', updated_at=?, "
+                        "assigned_user_id=COALESCE(assigned_user_id, ?) WHERE id=?", (ts, ts, u["id"] or None, r["id"]))
+            log_event(con, r["id"], actor, "close", reason)
+            if APPT_FOLLOW:
+                APPT_FOLLOW(con, r["id"], "close", actor=actor)
+        msg = "أُغلقت %d تذكرة." % len(rows)
+    else:
+        abort(400)
+    con.commit()
+    session["bulk_msg"] = ["ok", msg]
+    return redirect(back)
 
 
 @app.route("/admin/t/<ref>", methods=["GET", "POST"])
@@ -1573,6 +1757,20 @@ def admin_ticket(ref):
                         (add_workdays(ts, d["sla_days"] if d else 3), ts, 1 if leg_was_late(row, ts) else 0,
                          row["id"]))
             log_event(con, row["id"], actor, "reopen", clean(request.form.get("reopen_note"), 1000))
+            con.commit()
+            return redirect(url_for("admin_ticket", ref=ref, saved=1))
+        if action == "claim":
+            # the topic's own section takes over a ticket that is still at Employee Care
+            if row["status"] not in OPEN_STATUSES or not is_shared_view(u, row):
+                abort(400)
+            d = dept_by_id(u["dept_id"])
+            con.execute("UPDATE tickets SET dept_id=?, status='in_progress', assigned_user_id=?, due_at=?, updated_at=?, "
+                        "sla_breached=MAX(sla_breached, ?) WHERE id=?",
+                        (d["id"], u["id"] or None, add_workdays(ts, d["sla_days"]), ts, 1 if leg_was_late(row, ts) else 0,
+                         row["id"]))
+            log_event(con, row["id"], actor, "escalate", "سحبها القسم المختص لمعالجتها مباشرة.", row["dept_id"], d["id"])
+            if APPT_FOLLOW:
+                APPT_FOLLOW(con, row["id"], "escalate", d["id"], actor)
             con.commit()
             return redirect(url_for("admin_ticket", ref=ref, saved=1))
         if action == "newcode":
@@ -1668,9 +1866,12 @@ def _render_ticket(row, u, err=None):
     nc = session.pop("new_code", None)
     new_code = nc[1] if nc and nc[0] == row["ref"] else ""
     nxt = next_ticket(con, u, row["id"])
+    shared = is_shared_view(u, row)
     done_msg = session.pop("done_msg", None)
-    return render_template("admin_ticket.html", ratings=ratings, new_code=new_code, **actx, assignee=assignee, channels=CHANNELS,
-                           next_tk=nxt, done_msg=done_msg, templates=templates_for(con, u, row["dept_id"]),
+    quick_done = quick.quick_ctx(row["ref"])
+    return render_template("admin_ticket.html", ratings=ratings, new_code=new_code, quick_done=quick_done, **actx, assignee=assignee, channels=CHANNELS,
+                           next_tk=nxt, done_msg=done_msg, shared=shared,
+                           templates=templates_for(con, u, u["dept_id"] if shared else row["dept_id"]),
                            close_reasons=CLOSE_REASONS, rate_days=RATE_WINDOW_DAYS, open_statuses=OPEN_STATUSES, tk=row, statuses=STATUSES, types=REQ_TYPES,
                            saved=request.args.get("saved") == "1", err=err, events=events, kinds=EVENT_KINDS,
                            dept_names=dnames, depts=[d for d in depts if d["active"] and d["id"] != row["dept_id"]],
@@ -1770,7 +1971,9 @@ def admin_departments():
     no_staff = [d for d in depts if d["active"] and not staff.get(d["id"])]
     return render_template("admin_departments.html", depts=depts, counts=counts, staff=staff, opens=opens,
                            no_staff=no_staff, err=err, msg=msg, system=(INTAKE_KEY, COMPLAINTS_KEY),
-                           add_open=bool(err) and not request.form.get("id"))
+                           add_open=bool(err) and not request.form.get("id"), hol_msg=session.pop("hol_msg", None),
+                           holidays=db().execute("SELECT day, name FROM holidays WHERE day>=? ORDER BY day",
+                                                 (datetime.now(RIYADH).strftime("%Y-%m-01"),)).fetchall())
 
 
 # ---------------------------------------------------------------- user accounts
@@ -2021,6 +2224,7 @@ def compute_stats(u, args):
             "auto": sum(1 for r in rs if r["close_reason"] == "auto"),
             "staff_closed": sum(1 for r in rs if r["close_reason"] == "staff"),
             "walkin": sum(1 for r in rs if r["channel"] == "walkin"),
+            "direct": sum(1 for r in rs if r["channel"] == "direct"),
             "anon": sum(1 for r in rs if r["anonymous"]),
         }
 
@@ -2236,5 +2440,6 @@ def static_site(p):
 
 import appointments  # noqa: E402,F401  (registers its routes and hooks; needs everything above)
 import reports  # noqa: E402,F401  (Excel reports)
+import quick  # noqa: E402  (quick entry for walk-ins served directly)
 
 init_db()

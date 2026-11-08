@@ -1,6 +1,6 @@
-<nav class="adminnav" aria-label="قائمة اللوحة">
-  <a href="/admin" {% if anav=='list' %}class="cur"{% endif %}>التذاكر{% if nav_act %} <span class="nb" title="تحتاج إجراء">{{ nav_act }}</span>{% endif %}</a>
-  <a href="/admin/queue" {% if anav=='queue' %}class="cur"{% endif %}>المواعيد والانتظار{% if nav_wait %} <span class="nb wait" title="بالانتظار الآن">{{ nav_wait }}</span>{% endif %}</a>
+<nav class="adminnav" aria-label="قائمة اللوحة" data-pulse='{{ nav_pulse|tojson if nav_pulse else "{}" }}'>
+  <a href="/admin" {% if anav=='list' %}class="cur"{% endif %}>التذاكر <span class="nb" title="تحتاج إجراء" data-nb="act" {% if not nav_act %}hidden{% endif %}>{{ nav_act }}</span></a>
+  <a href="/admin/queue" {% if anav=='queue' %}class="cur"{% endif %}>المواعيد والانتظار <span class="nb wait" title="بالانتظار الآن" data-nb="wait" {% if not nav_wait %}hidden{% endif %}>{{ nav_wait }}</span></a>
   <a href="/admin/stats" {% if anav=='stats' %}class="cur"{% endif %}>المؤشرات</a>
   <a href="/admin/reports" {% if anav=='reports' %}class="cur"{% endif %}>التقارير</a>
   <a href="/admin/templates" {% if anav=='tpl' %}class="cur"{% endif %}>الردود الجاهزة</a>
@@ -10,6 +10,7 @@
   <a href="/admin/kiosks" {% if anav=='kiosks' %}class="cur"{% endif %}>أجهزة الاستقبال</a>
   {% endif %}
   <a href="/admin/password" {% if anav=='pw' %}class="cur"{% endif %}>كلمة المرور</a>
+  <button type="button" class="btn sound-t" data-sound-toggle aria-pressed="true" title="تنبيه صوتي عند وصول تذكرة أو حضور مراجع">🔔 التنبيه</button>
   <span class="who">{{ me.display_name }} · {{ roles.get(me.role, me.role) }}</span>
   <form method="post" action="/admin/logout"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn" type="submit">خروج</button></form>
 </nav>

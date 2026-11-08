@@ -162,7 +162,7 @@ def sheet_summary(wb, s, u, scope_label):
     pct = lambda v: (v / 100.0) if v is not None else None
     rnd = lambda v, k=1: round(v, k) if v is not None else None
     kpis = [
-        ("الطلبات المستلمة", T["n"], None), ("منها حضوري", T["walkin"], None), ("منها دون إفصاح", T["anon"], None),
+        ("الطلبات المستلمة", T["n"], None), ("منها عبر جهاز الاستقبال", T["walkin"], None), ("منها مباشر عند الموظف", T["direct"], None), ("منها دون إفصاح", T["anon"], None),
         ("المغلقة", T["closed"], None), ("المفتوحة الآن", T["open"], None), ("بانتظار تقييم الموظف", T["waiting"], None),
         ("المتأخرة عن المهلة الآن", T["late"], None), ("الالتزام بالمهلة", pct(T["sla"]), PCT_FMT),
         ("متوسط زمن أول رد (ساعة)", rnd(T["first"]), "0.0"), ("متوسط زمن الإنجاز (ساعة)", rnd(T["resolve"]), "0.0"),

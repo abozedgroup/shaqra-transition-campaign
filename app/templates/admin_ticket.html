@@ -16,7 +16,7 @@
     <div class="tk-title">
       <h1>تذكرة <span dir="ltr">{{ tk.ref }}</span></h1>
       <span class="badge st-{{ tk.status }}">{{ statuses.get(tk.status, tk.status) }}</span>
-      {% if tk.channel == 'walkin' and not tk.anonymous %}<span class="badge ch-walkin">حضوري</span>{% endif %}
+      {% if tk.channel == 'walkin' and not tk.anonymous %}<span class="badge ch-walkin">حضوري</span>{% endif %}{% if tk.channel == 'direct' %}<span class="badge ch-walkin" title="سُجّل مباشرة عند الموظف">مباشر</span>{% endif %}
       {% if tk.anonymous %}<span class="anon-tag">مجهول</span>{% endif %}
     </div>
     {% if next_tk %}<a class="btn tk-next" href="/admin/t/{{ next_tk.ref }}" title="أكثر تذكرة إلحاحًا بعد هذه">التالية: <b dir="ltr">{{ next_tk.ref }}</b> ←</a>{% endif %}
@@ -31,6 +31,12 @@
     </div>
   </header>
 
+  {% if quick_done %}<div class="okmsg quick-done" role="status"><b>سُجّل المراجع بالتذكرة رقم <span dir="ltr">{{ quick_done.ref }}</span>.</b>
+    رمز المتابعة: <b dir="ltr" class="k-code">{{ quick_done.code[:3] }}-{{ quick_done.code[3:] }}</b> – أعطه للمراجع إن أراد متابعة طلبه أو تقييم الخدمة من الموقع.
+    {% if quick_done.outcome == 'done' %}أُنهيت التذكرة، ويستطيع تقييم الخدمة من جهاز الاستقبال (برقم التذكرة مع آخر 4 أرقام من جواله أو رمز المتابعة) أو من الموقع.
+    {% elif quick_done.outcome == 'appt' %}احجز له الموعد الآن من تبويب «موعد حضوري» أدناه.
+    {% else %}التذكرة مفتوحة باسمك في قسمك حتى تنهيها.{% endif %}
+    <a href="/admin/quick">تسجيل مراجع آخر</a></div>{% endif %}
   {% if new_code %}<div class="okmsg" role="status">رمز المتابعة الجديد: <b dir="ltr" class="k-code">{{ new_code[:3] }}-{{ new_code[3:] }}</b> – أبلغه للموظف الآن؛ لن يظهر مرة أخرى، وأُلغي الرمز السابق.</div>{% endif %}
   {% if done_msg %}<div class="okmsg done-next" role="status"><b>{{ done_msg }}</b>
     {% if next_tk %}<a class="btn solid" href="/admin/t/{{ next_tk.ref }}">انتقل للتذكرة التالية: <span dir="ltr">{{ next_tk.ref }}</span>{% if not next_tk.anonymous %} – {{ next_tk.name }}{% endif %} ←</a>
@@ -38,6 +44,10 @@
   {% elif saved and not appt_done %}<div class="okmsg" role="status"><b>تم الحفظ.</b></div>{% endif %}
   {% if err %}<div class="warn" role="alert">{{ err }}</div>{% endif %}
 
+  {% if shared and tk.status in open_statuses %}
+  <div class="next-step ns-shared" role="note"><b>تذكرة مشتركة:</b> هي لدى <b>العناية بالموظفين</b> وموضوعها من اختصاص قسمك، فتظهر للفريقين. يمكنك معالجتها هنا مباشرة، أو سحبها لقسمك لتصبح مسؤوليته.
+    <form method="post" action="/admin/t/{{ tk.ref }}" class="inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="claim"><button class="btn small solid" type="submit">سحبها لقسمي</button></form></div>
+  {% endif %}
   {# ---------- what to do next ---------- #}
   <div class="next-step ns-{{ tk.status }}" role="note">
     <b>الخطوة التالية:</b>
@@ -175,11 +185,11 @@
         {% else %}
           <p class="who">{{ tk.name }}</p>
           <dl class="kv">
-            <dt>الرقم الوظيفي</dt><dd dir="ltr">{{ tk.emp_no }}</dd>
-            <dt>الجوال</dt><dd><a href="tel:{{ tk.mobile }}" dir="ltr">{{ tk.mobile }}</a></dd>
-            <dt>البريد</dt><dd><a href="mailto:{{ tk.email }}" dir="ltr" class="email">{{ tk.email }}</a></dd>
-            <dt>المنشأة</dt><dd>{{ tk.facility }}</dd>
-            <dt>الفئة</dt><dd>{{ tk.job_cat }}</dd>
+            <dt>الرقم الوظيفي</dt><dd dir="ltr">{{ tk.emp_no or '—' }}</dd>
+            <dt>الجوال</dt><dd>{% if tk.mobile %}<a href="tel:{{ tk.mobile }}" dir="ltr">{{ tk.mobile }}</a>{% else %}—{% endif %}</dd>
+            <dt>البريد</dt><dd>{% if tk.email %}<a href="mailto:{{ tk.email }}" dir="ltr" class="email">{{ tk.email }}</a>{% else %}—{% endif %}</dd>
+            <dt>المنشأة</dt><dd>{{ tk.facility or '—' }}</dd>
+            <dt>الفئة</dt><dd>{{ tk.job_cat or '—' }}</dd>
           </dl>
           <p class="hint">البيانات كتبها مقدّم الطلب ولم يُتحقق منها؛ تأكد من هويته قبل مشاركة معلومات حساسة.</p>
         {% endif %}
