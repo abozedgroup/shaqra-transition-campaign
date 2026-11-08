@@ -346,3 +346,44 @@ details.more[open] summary{margin-bottom:12px}
   .qp-tabs .tabs{flex-wrap:nowrap;overflow-x:auto}
   .qp-tabs .tabs [role=tab]{white-space:nowrap}
 }
+/* ---------- indicators page ---------- */
+.st-period{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:10px 18px;margin:0 0 4px}
+.st-period .presets{margin:0}
+.st-custom{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.st-custom label{display:flex;align-items:center;gap:6px;font-weight:700;font-size:14px}
+.st-custom input[type=date]{width:auto}
+.st-custom select{width:auto;min-width:140px}
+.st-heads{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin:0 0 18px}
+.st-head{background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px 16px;display:flex;flex-direction:column;gap:4px}
+.st-head .lbl{color:var(--muted);font-weight:700;font-size:14.5px}
+.st-head b{font-size:32px;color:var(--navy);line-height:1.2}
+.st-head small{color:var(--muted);font-size:13.5px}
+.st-more{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:0;margin:0;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.st-more>div{display:flex;justify-content:space-between;gap:10px;padding:10px 14px;border-bottom:1px solid var(--line);border-inline-start:1px solid var(--line);margin-inline-start:-1px}
+.st-more dt{color:var(--muted);font-weight:700;font-size:14px}
+.st-more dd{margin:0;font-weight:800;color:var(--navy)}
+.st-page .chart{border:0;padding:0}
+@media(max-width:900px){.st-period{flex-direction:column;align-items:stretch}.st-head b{font-size:26px}}
+.st-page details.attach{background:none;border:0;padding:0;border-radius:0;margin-top:8px}
+.st-page details.attach>summary{display:inline-flex;padding:4px 0;min-height:0;font-size:14.5px;color:#1f5fae}
+.st-page details.attach>summary::after{content:none}
+/* ---------- reports page ---------- */
+.rp-quick{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px}
+.rp-card{display:flex;flex-direction:column;gap:4px;padding:16px;border:1px solid var(--line);border-radius:14px;background:#fff;text-decoration:none;color:inherit}
+.rp-card:hover{border-color:#2a78d6;box-shadow:0 2px 10px rgba(42,120,214,.1)}
+.rp-card:focus-visible{outline:3px solid #e0a800;outline-offset:2px}
+.rp-card b{color:var(--navy);font-size:17px}
+.rp-card span{font-size:14px}
+.rp-card small{color:var(--muted)}
+.rp-card em{font-style:normal;font-weight:800;color:#1f5fae;margin-top:6px}
+.rp-form fieldset{border:0;padding:0;margin:0 0 18px}
+.rp-form legend{font-weight:800;color:var(--navy);font-size:16px;margin-bottom:8px}
+.rp-form .presets{margin:0 0 8px}
+.rp-sheets{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px}
+.rp-sheets .chk{align-items:flex-start;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--soft)}
+.rp-sheets .chk span{display:flex;flex-direction:column;gap:2px}
+.rp-sheets small{color:var(--muted);font-weight:400}
+/* the staff menu has ten entries: keep it on one line on a laptop */
+.adminnav{gap:4px;padding:8px 10px}
+.adminnav a{padding:4px 9px;font-size:15px}
+.adminnav .who{font-size:13px}

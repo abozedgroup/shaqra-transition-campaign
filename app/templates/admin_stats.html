@@ -2,102 +2,151 @@
 {% block title %}المؤشرات{% endblock %}
 {% macro num(v, suf='') %}{% if v is none %}—{% else %}{{ v }}{{ suf }}{% endif %}{% endmacro %}
 {% macro stars(v) %}{% if v is none %}—{% else %}<span dir="ltr">{{ '%.1f'|format(v) }} / 5</span>{% endif %}{% endmacro %}
-{% macro brow(name, x) %}<tr><td class="wrap">{{ name }}</td><td>{{ x.n }}</td><td>{{ x.closed }}</td><td>{{ x.open }}</td><td>{{ x.waiting }}</td>
-  <td>{% if x.late %}<span class="late-txt">{{ x.late }}</span>{% else %}0{% endif %}</td><td>{{ num(x.sla, '%') }}</td>
-  <td>{{ x.first|dur }}</td><td>{{ x.resolve|dur }}</td><td>{{ x.esc }}</td><td>{{ stars(x.stars) }} <small class="hint">({{ x.nrat }})</small></td><td>{{ num(x.csat, '%') }}</td></tr>{% endmacro %}
-{% macro btable(rows) %}<div class="tablewrap"><table class="tbl stats">
-  <thead><tr><th></th><th>المستلمة</th><th>المغلقة</th><th>المفتوحة</th><th>بانتظار التقييم</th><th>المتأخرة</th><th>الالتزام بالمهلة</th><th>متوسط أول رد</th><th>متوسط الإنجاز</th><th>المصعّدة</th><th>التقييم (العدد)</th><th>الرضا</th></tr></thead>
-  <tbody>{% for name, x in rows %}{{ brow(name, x) }}{% else %}<tr><td colspan="12" class="center">لا توجد بيانات في هذه الفترة.</td></tr>{% endfor %}</tbody></table></div>{% endmacro %}
+{% macro btable(rows, label) %}<div class="tablewrap"><table class="tbl stats">
+  <thead><tr><th>{{ label }}</th><th>المستلمة</th><th>المغلقة</th><th>المفتوحة</th><th>المتأخرة</th><th>الالتزام بالمهلة</th><th>متوسط الإنجاز</th><th>التقييم</th><th>الرضا</th></tr></thead>
+  <tbody>{% for name, x in rows %}<tr><td class="wrap"><b>{{ name }}</b></td><td>{{ x.n }}</td><td>{{ x.closed }}</td><td>{{ x.open }}</td>
+    <td>{% if x.late %}<span class="late-txt">{{ x.late }}</span>{% else %}0{% endif %}</td><td>{{ num(x.sla, '%') }}</td><td>{{ x.resolve|dur }}</td>
+    <td>{{ stars(x.stars) }}{% if x.nrat %} <small class="hint">({{ x.nrat }})</small>{% endif %}</td><td>{{ num(x.csat, '%') }}</td></tr>
+  {% else %}<tr><td colspan="9" class="center">لا توجد بيانات في هذه الفترة.</td></tr>{% endfor %}</tbody></table></div>{% endmacro %}
+{% macro tab(key, label, n=none, cls='') %}<button type="button" role="tab" id="tab-{{ key }}" aria-controls="pane-{{ key }}" data-hash="{{ key }}" aria-selected="{{ 'true' if key == 'over' else 'false' }}" class="{{ cls }}">{{ label }}{% if n is not none %} <span class="n">{{ n }}</span>{% endif %}</button>{% endmacro %}
 {% block body %}
-<section class="s adm"><div class="wrap wide">
+{% set T = s.total %}{% set A = s.appt %}
+{% set q = 'from=' ~ s.f.from ~ '&to=' ~ s.f.to ~ '&dept=' ~ s.f.dept ~ '&channel=' ~ s.f.channel %}
+<section class="s adm st-page"><div class="wrap wide">
   {% set anav='stats' %}{% include "_adminnav.html" %}
-  {% set T = s.total %}
-  <h1 class="h1s">مؤشرات الطلبات{% if not me_admin %} – {{ my_dept.name_ar if my_dept else '' }}{% endif %}</h1>
-  <form class="filters" method="get" action="/admin/stats">
-    <label class="lbl-inline">من <input type="date" name="from" value="{{ s.f.from }}"></label>
-    <label class="lbl-inline">إلى <input type="date" name="to" value="{{ s.f.to }}"></label>
-    {% if me_admin %}<select name="dept" aria-label="القسم"><option value="">كل الأقسام</option>{% for d in s.depts %}<option value="{{ d.id }}" {% if s.f.dept==d.id|string %}selected{% endif %}>{{ d.name_ar }}</option>{% endfor %}</select>{% endif %}
-    <select name="channel" aria-label="القناة"><option value="">كل القنوات</option>{% for k,l in s.channels.items() %}<option value="{{k}}" {% if s.f.channel==k %}selected{% endif %}>{{l}}</option>{% endfor %}</select>
-    <button class="btn solid" type="submit">عرض</button>
-    <a class="btn" href="/admin/stats.csv?from={{ s.f.from }}&to={{ s.f.to }}&dept={{ s.f.dept }}&channel={{ s.f.channel }}">تصدير CSV</a>
-  </form>
-  <p class="presets">{% for label, a, b in presets %}<a href="/admin/stats?from={{ a }}&to={{ b }}&dept={{ s.f.dept }}&channel={{ s.f.channel }}" {% if s.f.from==a|string and s.f.to==b|string %}class="cur"{% endif %}>{{ label }}</a>{% endfor %}</p>
-  <p class="hint">المؤشرات للتذاكر المقدَّمة من {{ s.f.from }} إلى {{ s.f.to }} ({{ s.period_days }} يومًا). «المتأخرة» تُحسب بحالتها الآن.</p>
 
-  <h2 class="h2s">الطلبات والإغلاق</h2>
-  <div class="kpis">
-    <div class="kpi"><b>{{ T.n }}</b><span>طلبات مستلمة</span><small>منها {{ T.walkin }} حضوري · {{ T.anon }} دون إفصاح</small></div>
-    <div class="kpi"><b>{{ T.closed }}</b><span>مغلقة</span><small>{{ T.auto }} تلقائيًا · {{ T.staff_closed }} دون تقييم</small></div>
-    <div class="kpi"><b>{{ T.open }}</b><span>مفتوحة</span><small>{{ T.waiting }} أخرى بانتظار التقييم</small></div>
-    <div class="kpi late"><b>{{ T.late }}</b><span>متأخرة عن المهلة</span></div>
-    <div class="kpi"><b>{{ num(T.sla, '%') }}</b><span>الالتزام بالمهلة</span><small>من {{ T.done }} تذكرة أُنجزت</small></div>
-  </div>
-  <div class="kpis">
-    <div class="kpi"><b>{{ T.first|dur }}</b><span>متوسط زمن أول رد</span></div>
-    <div class="kpi"><b>{{ T.resolve|dur }}</b><span>متوسط زمن الإنجاز</span><small>الوسيط {{ T.resolve_med|dur }}</small></div>
-    <div class="kpi"><b>{{ num(T.esc_pct, '%') }}</b><span>نسبة التصعيد</span><small>{{ T.esc }} تذكرة أُحيلت</small></div>
+  <header class="tl-head">
+    <h1>المؤشرات{% if not me_admin %} – {{ my_dept.name_ar if my_dept else '' }}{% endif %}</h1>
+    <a class="btn solid" href="/admin/reports?{{ q }}">⬇ تقارير Excel</a>
+  </header>
+
+  {# ---------- period ---------- #}
+  <div class="st-period">
+    <nav class="presets" aria-label="الفترة">{% for label, a, b in presets %}<a href="/admin/stats?from={{ a }}&to={{ b }}&dept={{ s.f.dept }}&channel={{ s.f.channel }}" {% if s.f.from==a|string and s.f.to==b|string %}class="cur" aria-current="true"{% endif %}>{{ label }}</a>{% endfor %}</nav>
+    <form class="st-custom" method="get" action="/admin/stats">
+      <label>من <input type="date" name="from" value="{{ s.f.from }}"></label>
+      <label>إلى <input type="date" name="to" value="{{ s.f.to }}"></label>
+      {% if me_admin %}<select name="dept" aria-label="القسم"><option value="">كل الأقسام</option>{% for d in s.depts %}<option value="{{ d.id }}" {% if s.f.dept==d.id|string %}selected{% endif %}>{{ d.name_ar }}</option>{% endfor %}</select>{% endif %}
+      <select name="channel" aria-label="القناة"><option value="">كل القنوات</option>{% for k,l in s.channels.items() %}<option value="{{k}}" {% if s.f.channel==k %}selected{% endif %}>{{l}}</option>{% endfor %}</select>
+      <button class="btn" type="submit">عرض</button>
+    </form>
   </div>
 
-  <h2 class="h2s">رضا الموظفين</h2>
-  <div class="kpis">
-    <div class="kpi"><b>{{ stars(T.stars) }}</b><span>متوسط التقييم</span><small>{{ T.nrat }} تقييمًا</small></div>
-    <div class="kpi"><b>{{ num(T.csat, '%') }}</b><span>نسبة الرضا</span><small>من قيّم بـ 4 أو 5</small></div>
-    <div class="kpi"><b>{{ num(T.resp, '%') }}</b><span>نسبة من قيّم</span><small>من التذاكر التي أُرسل ردها للتقييم</small></div>
-    <div class="kpi late"><b>{{ T.unresolved }}</b><span>أفاد بأن طلبه لم يُحل</span></div>
+  {# ---------- summary in words ---------- #}
+  <div class="next-step" role="note">
+    <b>الخلاصة ({{ s.f.from }} – {{ s.f.to }}):</b>
+    استلمنا <b>{{ T.n }}</b> طلبًا{% if T.walkin %} (منها {{ T.walkin }} حضوري){% endif %}، وأُغلق <b>{{ T.closed }}</b>، وما زال <b>{{ T.open }}</b> مفتوحًا.
+    {% if T.sla is not none %}الالتزام بالمهلة <b>{{ T.sla }}%</b>، {% endif %}ومتوسط الإنجاز <b>{{ T.resolve|dur }}</b>.
+    {% if T.nrat %}نسبة الرضا <b>{{ T.csat }}%</b> من {{ T.nrat }} تقييمًا.{% else %}لا توجد تقييمات بعد.{% endif %}
+    {% set warn = [] %}
+    {% if T.late %}{% set _ = warn.append(T.late ~ ' متأخرة عن المهلة') %}{% endif %}
+    {% if T.unresolved %}{% set _ = warn.append(T.unresolved ~ ' أفادوا بأن طلبهم لم يُحل') %}{% endif %}
+    {% if A.no_show_pct is not none and A.no_show_pct >= 20 %}{% set _ = warn.append('نسبة عدم الحضور للمواعيد ' ~ A.no_show_pct ~ '%') %}{% endif %}
+    {% if A.pending %}{% set _ = warn.append(A.pending ~ ' طلب موعد بانتظار الحجز') %}{% endif %}
+    {% if warn %}<br><b class="hot-txt">يحتاج انتباهًا:</b> {{ warn|join(' · ') }}.{% endif %}
   </div>
 
-  {% set A = s.appt %}
-  <h2 class="h2s">المواعيد الحضورية والانتظار</h2>
-  <div class="kpis">
-    <div class="kpi"><b>{{ A.booked }}</b><span>مواعيد محجوزة</span><small>{{ A.requested }} طلبها الموظفون · {{ A.pending }} بانتظار الحجز</small></div>
-    <div class="kpi"><b>{{ A.done }}</b><span>حضروا وخُدموا</span><small>{{ A.cancelled }} أُلغيت</small></div>
-    <div class="kpi late"><b>{{ num(A.no_show_pct, '%') }}</b><span>نسبة عدم الحضور</span><small>{{ A.no_show }} لم يحضروا</small></div>
-    <div class="kpi"><b>{{ A.walkins }}</b><span>حضوري بدون موعد</span></div>
-    <div class="kpi"><b>{{ num(A.wait, ' د') }}</b><span>متوسط الانتظار</span><small>من الوصول حتى الاستدعاء</small></div>
-    <div class="kpi"><b>{{ num(A.service, ' د') }}</b><span>متوسط مدة الخدمة</span></div>
+  {# ---------- 4 headline numbers ---------- #}
+  <div class="st-heads">
+    <div class="st-head"><span class="lbl">الطلبات المستلمة</span><b>{{ T.n }}</b><small>{{ T.closed }} مغلقة · {{ T.open }} مفتوحة · {{ T.waiting }} بانتظار التقييم</small></div>
+    <div class="st-head"><span class="lbl">الالتزام بالمهلة</span><b>{{ num(T.sla, '%') }}</b><small>من {{ T.done }} تذكرة أُنجزت{% if T.late %} · <span class="late-txt">{{ T.late }} متأخرة الآن</span>{% endif %}</small></div>
+    <div class="st-head"><span class="lbl">متوسط زمن الإنجاز</span><b>{{ T.resolve|dur }}</b><small>أول رد خلال {{ T.first|dur }} في المتوسط</small></div>
+    <div class="st-head"><span class="lbl">نسبة الرضا</span><b>{{ num(T.csat, '%') }}</b><small>متوسط {{ stars(T.stars) }} من {{ T.nrat }} تقييمًا</small></div>
   </div>
 
-  <h2 class="h2s">المستلمة والمغلقة {{ 'أسبوعيًا' if s.step == 7 else 'يوميًا' }}</h2>
-  {% set mx = [1] %}{% for l, a, b in s.series %}{% if a > mx[-1] %}{% set _ = mx.append(a) %}{% endif %}{% if b > mx[-1] %}{% set _ = mx.append(b) %}{% endif %}{% endfor %}
-  {% set M = ((mx[-1] + 3) // 4) * 4 %}{% set n = s.series|length %}
-  {% set W, H, L, R, TP, B = 900, 240, 34, 8, 10, 28 %}{% set pw = W - L - R %}{% set ph = H - TP - B %}{% set slot = pw / n %}
-  {% set bw = [[slot * 0.34, 16]|min, 2]|max %}
-  <div class="chart">
-    <div class="legend" aria-hidden="true"><span><i class="sw s1"></i>المستلمة</span><span><i class="sw s2"></i>المغلقة</span></div>
-    <svg viewBox="0 0 {{ W }} {{ H }}" role="img" aria-label="عدد التذاكر المستلمة والمغلقة {{ 'أسبوعيًا' if s.step == 7 else 'يوميًا' }}، أعلى قيمة {{ M }}" direction="ltr">
-      {% for k in range(0, 5) %}{% set y = TP + ph - ph * k / 4 %}
-        <line x1="{{ L }}" x2="{{ W - R }}" y1="{{ y }}" y2="{{ y }}" class="grid"/>
-        <text x="{{ L - 6 }}" y="{{ y + 4 }}" class="ax" text-anchor="end">{{ (M * k // 4) }}</text>{% endfor %}
-      {% set every = ((n / 10)|round(0, 'ceil'))|int %}
-      {% for l, a, b in s.series %}{% set x0 = L + slot * loop.index0 + slot / 2 %}
-        <g class="bar-g"><title>{{ l }}: مستلمة {{ a }} · مغلقة {{ b }}</title>
-          <rect x="{{ x0 - slot / 2 }}" y="{{ TP }}" width="{{ slot }}" height="{{ ph }}" class="hit"/>
-          {% if a %}<rect x="{{ x0 - bw - 1 }}" y="{{ TP + ph - ph * a / M }}" width="{{ bw }}" height="{{ ph * a / M }}" rx="2" class="s1"/>{% endif %}
-          {% if b %}<rect x="{{ x0 + 1 }}" y="{{ TP + ph - ph * b / M }}" width="{{ bw }}" height="{{ ph * b / M }}" rx="2" class="s2"/>{% endif %}
-        </g>
-        {% if loop.index0 % every == 0 %}<text x="{{ x0 }}" y="{{ H - 8 }}" class="ax" text-anchor="middle">{{ l }}</text>{% endif %}
-      {% endfor %}
-      <line x1="{{ L }}" x2="{{ W - R }}" y1="{{ TP + ph }}" y2="{{ TP + ph }}" class="base"/>
-    </svg>
-    <details><summary>عرض البيانات كجدول</summary>
-      <div class="tablewrap"><table class="tbl"><thead><tr><th>{{ 'الأسبوع' if s.step == 7 else 'اليوم' }}</th><th>المستلمة</th><th>المغلقة</th></tr></thead>
-      <tbody>{% for l, a, b in s.series %}<tr><td dir="ltr">{{ l }}</td><td>{{ a }}</td><td>{{ b }}</td></tr>{% endfor %}</tbody></table></div></details>
-  </div>
+  {# ---------- details in tabs ---------- #}
+  <section class="card qp-tabs">
+    <div class="tabs" role="tablist" aria-label="تفاصيل المؤشرات">
+      {{ tab('over', 'نظرة عامة') }}
+      {% if me_admin %}{{ tab('dept', 'حسب القسم', s.by.dept|length) }}{% endif %}
+      {{ tab('staff', 'حسب الموظف', s.by.staff|length) }}
+      {{ tab('topic', 'حسب الموضوع', s.by.topic|length) }}
+      {{ tab('chan', 'القناة والنوع') }}
+      {{ tab('fac', 'المنشأة', s.by.facility|length) }}
+      {{ tab('appt', 'المواعيد') }}
+      {{ tab('low', 'تقييمات للمراجعة', s.low|length, 'hot' if s.low else '') }}
+    </div>
 
-  {% if me_admin %}<h2 class="h2s">حسب القسم</h2>{{ btable(s.by.dept) }}{% endif %}
-  <h2 class="h2s">حسب الموظف المسؤول</h2>{{ btable(s.by.staff) }}
-  <h2 class="h2s">حسب الموضوع</h2>{{ btable(s.by.topic) }}
-  <div class="grid2">
-    <div><h2 class="h2s">حسب القناة</h2>{{ btable(s.by.channel) }}</div>
-    <div><h2 class="h2s">حسب النوع</h2>{{ btable(s.by.type) }}</div>
-  </div>
-  <h2 class="h2s">حسب المنشأة</h2>{{ btable(s.by.facility) }}
+    <div class="pane" role="tabpanel" id="pane-over" aria-labelledby="tab-over">
+      {% set M = 1 %}{% set mx = [1] %}{% for l, a, b in s.series %}{% if a > mx[-1] %}{% set _ = mx.append(a) %}{% endif %}{% if b > mx[-1] %}{% set _ = mx.append(b) %}{% endif %}{% endfor %}
+      {% set M = ((mx[-1] + 3) // 4) * 4 %}{% set n = s.series|length %}
+      {% set W, H, L, R, TP, B = 900, 220, 34, 8, 10, 28 %}{% set pw = W - L - R %}{% set ph = H - TP - B %}{% set slot = pw / n %}
+      {% set bw = [[slot * 0.34, 16]|min, 2]|max %}
+      <h3 class="sub-h">المستلمة والمغلقة {{ 'أسبوعيًا' if s.step == 7 else 'يوميًا' }}</h3>
+      <div class="chart">
+        <div class="legend" aria-hidden="true"><span><i class="sw s1"></i>المستلمة</span><span><i class="sw s2"></i>المغلقة</span></div>
+        <svg viewBox="0 0 {{ W }} {{ H }}" role="img" aria-label="عدد التذاكر المستلمة والمغلقة {{ 'أسبوعيًا' if s.step == 7 else 'يوميًا' }}، أعلى قيمة {{ M }}" direction="ltr">
+          {% for k in range(0, 5) %}{% set y = TP + ph - ph * k / 4 %}
+            <line x1="{{ L }}" x2="{{ W - R }}" y1="{{ y }}" y2="{{ y }}" class="grid"/>
+            <text x="{{ L - 6 }}" y="{{ y + 4 }}" class="ax" text-anchor="end">{{ (M * k // 4) }}</text>{% endfor %}
+          {% set every = ((n / 10)|round(0, 'ceil'))|int %}
+          {% for l, a, b in s.series %}{% set x0 = L + slot * loop.index0 + slot / 2 %}
+            <g class="bar-g"><title>{{ l }}: مستلمة {{ a }} · مغلقة {{ b }}</title>
+              <rect x="{{ x0 - slot / 2 }}" y="{{ TP }}" width="{{ slot }}" height="{{ ph }}" class="hit"/>
+              {% if a %}<rect x="{{ x0 - bw - 1 }}" y="{{ TP + ph - ph * a / M }}" width="{{ bw }}" height="{{ ph * a / M }}" rx="2" class="s1"/>{% endif %}
+              {% if b %}<rect x="{{ x0 + 1 }}" y="{{ TP + ph - ph * b / M }}" width="{{ bw }}" height="{{ ph * b / M }}" rx="2" class="s2"/>{% endif %}
+            </g>
+            {% if loop.index0 % every == 0 %}<text x="{{ x0 }}" y="{{ H - 8 }}" class="ax" text-anchor="middle">{{ l }}</text>{% endif %}
+          {% endfor %}
+          <line x1="{{ L }}" x2="{{ W - R }}" y1="{{ TP + ph }}" y2="{{ TP + ph }}" class="base"/>
+        </svg>
+        <details class="attach"><summary>عرض البيانات كجدول</summary>
+          <div class="tablewrap"><table class="tbl"><thead><tr><th>{{ 'الأسبوع' if s.step == 7 else 'اليوم' }}</th><th>المستلمة</th><th>المغلقة</th></tr></thead>
+          <tbody>{% for l, a, b in s.series %}<tr><td dir="ltr">{{ l }}</td><td>{{ a }}</td><td>{{ b }}</td></tr>{% endfor %}</tbody></table></div></details>
+      </div>
+      <h3 class="sub-h">بقية الأرقام</h3>
+      <dl class="st-more">
+        <div><dt>مفتوحة الآن</dt><dd>{{ T.open }}</dd></div>
+        <div><dt>متأخرة عن المهلة</dt><dd class="{{ 'late-txt' if T.late }}">{{ T.late }}</dd></div>
+        <div><dt>بانتظار تقييم الموظف</dt><dd>{{ T.waiting }}</dd></div>
+        <div><dt>أُغلقت بعد التقييم</dt><dd>{{ T.closed - T.auto - T.staff_closed }}</dd></div>
+        <div><dt>أُغلقت تلقائيًا (لم يقيّم)</dt><dd>{{ T.auto }}</dd></div>
+        <div><dt>أُغلقت دون تقييم (القسم)</dt><dd>{{ T.staff_closed }}</dd></div>
+        <div><dt>الوسيط لزمن الإنجاز</dt><dd>{{ T.resolve_med|dur }}</dd></div>
+        <div><dt>نسبة التصعيد</dt><dd>{{ num(T.esc_pct, '%') }} <small>({{ T.esc }})</small></dd></div>
+        <div><dt>نسبة من قيّم</dt><dd>{{ num(T.resp, '%') }}</dd></div>
+        <div><dt>أفاد بأن طلبه لم يُحل</dt><dd class="{{ 'late-txt' if T.unresolved }}">{{ T.unresolved }}</dd></div>
+        <div><dt>حضوري</dt><dd>{{ T.walkin }}</dd></div>
+        <div><dt>دون إفصاح</dt><dd>{{ T.anon }}</dd></div>
+      </dl>
+    </div>
 
-  <h2 class="h2s">تقييمات تحتاج مراجعة <span class="opt">(تقييم 2 أو أقل، أو «لم يُحل»)</span></h2>
-  <div class="tablewrap"><table class="tbl">
-    <thead><tr><th>التذكرة</th><th>التاريخ</th><th>التقييم</th><th>حُلّ؟</th><th>الملاحظة</th></tr></thead>
-    <tbody>{% for r, x in s.low %}<tr><td><a href="/admin/t/{{ r.ref }}" dir="ltr">{{ r.ref }}</a></td><td>{{ x.at|dt }}</td><td>{{ x.stars }} / 5</td>
-      <td>{{ 'نعم' if x.resolved else 'لا' }}</td><td class="wrap">{{ x.comment or '—' }}</td></tr>
-    {% else %}<tr><td colspan="5" class="center">لا توجد تقييمات منخفضة في هذه الفترة.</td></tr>{% endfor %}</tbody></table></div>
+    {% if me_admin %}<div class="pane" role="tabpanel" id="pane-dept" aria-labelledby="tab-dept" data-hidden>{{ btable(s.by.dept, 'القسم') }}</div>{% endif %}
+    <div class="pane" role="tabpanel" id="pane-staff" aria-labelledby="tab-staff" data-hidden><p class="hint">حسب الموظف المسؤول عن التذكرة (من استلمها أو أنهاها).</p>{{ btable(s.by.staff, 'الموظف') }}</div>
+    <div class="pane" role="tabpanel" id="pane-topic" aria-labelledby="tab-topic" data-hidden>{{ btable(s.by.topic, 'الموضوع') }}</div>
+    <div class="pane" role="tabpanel" id="pane-chan" aria-labelledby="tab-chan" data-hidden>
+      <h3 class="sub-h">حسب القناة</h3>{{ btable(s.by.channel, 'القناة') }}
+      <h3 class="sub-h">حسب النوع</h3>{{ btable(s.by.type, 'النوع') }}
+    </div>
+    <div class="pane" role="tabpanel" id="pane-fac" aria-labelledby="tab-fac" data-hidden>{{ btable(s.by.facility, 'المنشأة') }}</div>
+    <div class="pane" role="tabpanel" id="pane-appt" aria-labelledby="tab-appt" data-hidden>
+      <dl class="st-more">
+        <div><dt>مواعيد محجوزة</dt><dd>{{ A.booked }}</dd></div>
+        <div><dt>حضروا وخُدموا</dt><dd>{{ A.done }}</dd></div>
+        <div><dt>لم يحضروا</dt><dd class="{{ 'late-txt' if A.no_show }}">{{ A.no_show }} <small>({{ num(A.no_show_pct, '%') }})</small></dd></div>
+        <div><dt>أُلغيت</dt><dd>{{ A.cancelled }}</dd></div>
+        <div><dt>طلبها الموظفون</dt><dd>{{ A.requested }}</dd></div>
+        <div><dt>بانتظار الحجز</dt><dd>{{ A.pending }}</dd></div>
+        <div><dt>حضوري بدون موعد</dt><dd>{{ A.walkins }}</dd></div>
+        <div><dt>متوسط الانتظار</dt><dd>{{ num(A.wait, ' دقيقة') }}</dd></div>
+        <div><dt>متوسط مدة الخدمة</dt><dd>{{ num(A.service, ' دقيقة') }}</dd></div>
+      </dl>
+    </div>
+    <div class="pane" role="tabpanel" id="pane-low" aria-labelledby="tab-low" data-hidden>
+      <p class="hint">تقييم 2 أو أقل، أو أفاد الموظف بأن طلبه لم يُحل. راجعها مع القسم المعني.</p>
+      <div class="ql">
+        {% for r, x in s.low %}
+        <div class="ql-row">
+          <span class="ql-n time"><span class="stars-txt" aria-label="{{ x.stars }} من 5">{% for k in range(5) %}{{ '★' if k < x.stars else '☆' }}{% endfor %}</span></span>
+          <span class="ql-main"><a href="/admin/t/{{ r.ref }}"><b dir="ltr">{{ r.ref }}</b> {{ 'مجهول' if r.anonymous else r.name }}</a><small>{{ x.comment or 'بدون تعليق' }}</small></span>
+          <span class="ql-state">{{ 'تم الحل' if x.resolved else '<b class="hot-txt">لم يُحل</b>'|safe }}</span>
+          <span class="ql-acts"><small class="hint">{{ x.at|day }}</small></span>
+        </div>
+        {% else %}<p class="ql-empty">لا توجد تقييمات منخفضة في هذه الفترة.</p>{% endfor %}
+      </div>
+    </div>
+  </section>
+  <p class="hint mt18">المؤشرات للتذاكر المقدَّمة في الفترة المختارة ({{ s.period_days|days_ar }}). «المتأخرة» و«المفتوحة» بحالتها الآن.</p>
 </div></section>
 {% endblock %}
+{% block scripts %}<script src="/app-static/admin.js"></script>{% endblock %}

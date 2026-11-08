@@ -238,7 +238,7 @@ a.post("/admin/kiosks", data=dict(csrf_token=tok(h), action="disable", id=str(ki
 ok(kk.get("/kiosk").status_code == 403, "disabled kiosk blocked")
 
 # ---------------- indicators
-r, h = get(a, "/admin/stats"); ok(r.status_code == 200 and "متوسط التقييم" in h and "<svg" in h and "حسب القسم" in h, "stats page renders")
+r, h = get(a, "/admin/stats"); ok(r.status_code == 200 and "نسبة الرضا" in h and "<svg" in h and "حسب القسم" in h and "الخلاصة" in h, "stats page renders")
 ok("4.0 / 5" in h or "/ 5" in h, "average rating shown")
 r, h = get(a, "/admin/stats?from=2025-01-01&to=2026-12-31&channel=walkin"); ok(r.status_code == 200 and "<svg" in h, "long range weekly + channel filter")
 r = a.get("/admin/stats.csv"); ok("حسب الموظف المسؤول" in r.get_data(as_text=True), "stats csv")

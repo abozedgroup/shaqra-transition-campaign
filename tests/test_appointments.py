@@ -136,7 +136,7 @@ pending = q("SELECT COUNT(*) FROM appointments WHERE status='checked_in'")[0][0]
 CLOCK[0] += timedelta(days=1)
 A._sweep["at"] = 0; get(a, "/admin")
 ok(q("SELECT COUNT(*) FROM appointments WHERE status='checked_in'")[0][0] == 0, "yesterday's queue closed by the sweep (%d)" % pending)
-r, h = get(a, "/admin/stats?from=2026-01-01&to=2026-12-31"); ok("المواعيد الحضورية والانتظار" in h and "حضوري بدون موعد" in h, "indicators section")
+r, h = get(a, "/admin/stats?from=2026-01-01&to=2026-12-31"); ok("pane-appt" in h and "حضوري بدون موعد" in h and "لم يحضروا" in h, "indicators: appointments tab")
 # settings: invalid hours refused, valid saved
 r, h = get(a, "/admin/queue")
 r = a.post("/admin/queue/settings", data=dict(csrf_token=tok(h), appt_start="15:00", appt_end="08:00", slot_min="15", capacity="2", appt_enabled="1"), follow_redirects=True)
@@ -149,4 +149,40 @@ s = A.app.test_client(); r, h = get(s, "/admin/login"); s.post("/admin/login", d
 r, h = get(s, "/admin/queue"); ok(ref2 not in h and "الإجازات" in h, "staff sees only own section queue")
 ok(s.post("/admin/t/%s/appt" % ref2, data=dict(csrf_token=tok(h), action="cancel")).status_code == 404, "staff cannot act on another section's appointment")
 ok(s.post("/admin/queue/settings", data=dict(csrf_token=tok(h), appt_start="08:00", appt_end="09:00")).status_code == 404, "staff cannot change settings")
+
+# ---------------- Excel reports
+import io as _io
+from openpyxl import load_workbook
+c3 = A.app.test_client(); r, h = get(c3, "/ticket")
+c3.post("/ticket", data=dict(base, csrf_token=tok(h), email="inj@moh.gov.sa", message="=HYPERLINK(\"http://x\",\"click\") طلب"))
+r, h = get(c3, "/ticket"); c3.post("/ticket", data=dict(csrf_token=tok(h), req_type="feedback", topic="general", message="ملاحظة مجهولة للتقرير", anonymous="1", consent="1"))
+r, h = get(a, "/admin/reports"); ok("تقارير جاهزة" in h and "تقرير مخصص" in h and "التذاكر المفتوحة الآن" in h, "reports page")
+r = a.get("/admin/reports.xlsx?from=2026-01-01&to=2026-12-31&summary=1&tickets=1&ratings=1&appts=1&events=1")
+ok(r.status_code == 200 and r.mimetype.endswith("spreadsheetml.sheet") and r.data[:2] == b"PK", "xlsx downloaded")
+wb = load_workbook(_io.BytesIO(r.data))
+ok(wb.sheetnames[:2] == ["الملخص", "حسب القسم"] and {"التذاكر", "التقييمات", "المواعيد", "سجل الإجراءات"} <= set(wb.sheetnames), "sheets: %s" % wb.sheetnames)
+ok(all(ws.sheet_view.rightToLeft for ws in wb.worksheets), "all sheets right-to-left")
+tk = wb["التذاكر"]; hdr = [c.value for c in tk[1]]
+nt = q("SELECT COUNT(*) FROM tickets")[0][0]
+ok(tk.max_row - 1 == nt, "every ticket in the sheet (%d)" % nt)
+msgs = [row[hdr.index("نص الطلب")] for row in tk.iter_rows(min_row=2, values_only=True)]
+inj = [m for m in msgs if m and m.startswith("=HYPERLINK")]
+ok(inj and all(cell.data_type == "s" for cell in tk[hdr.index("نص الطلب") + 1] if cell.value == inj[0]), "formula-looking text stays text")
+anon_row = [row for row in tk.iter_rows(min_row=2, values_only=True) if row[hdr.index("دون إفصاح")] == "نعم"][0]
+from datetime import datetime as _dt
+arow = [i for i, row in enumerate(tk.iter_rows(min_row=2, values_only=True), 2) if row[hdr.index("دون إفصاح")] == "نعم"][0]
+acell = tk.cell(row=arow, column=hdr.index("تاريخ التقديم") + 1)
+ok(not anon_row[hdr.index("الاسم")] and acell.value.hour == 0 and acell.value.minute == 0 and acell.number_format == "yyyy-mm-dd",
+   "anonymous: no name, date only (no time)")
+ok(isinstance(tk.cell(row=2, column=2).value, (_dt,)) or tk.cell(row=2, column=2).value is not None, "real dates in Excel")
+ok(wb["المواعيد"].max_row > 1 and wb["سجل الإجراءات"].max_row > 1, "appointments and log sheets filled")
+summ = {r_[0]: r_[1] for r_ in wb["الملخص"].iter_rows(min_row=9, max_col=2, values_only=True) if r_[0]}
+ok(summ.get("الطلبات المستلمة") == nt, "summary total matches (%s)" % summ.get("الطلبات المستلمة"))
+r = a.get("/admin/reports.xlsx?open=1&tickets=1"); wb2 = load_workbook(_io.BytesIO(r.data))
+st = [row[2] for row in wb2["التذاكر"].iter_rows(min_row=2, values_only=True)]
+ok(st and "مغلقة" not in st, "open-tickets report has no closed tickets (%d)" % len(st))
+r = s.get("/admin/reports.xlsx?from=2026-01-01&to=2026-12-31&tickets=1&dept=1"); wb3 = load_workbook(_io.BytesIO(r.data))
+deps = {row[5] for row in wb3["التذاكر"].iter_rows(min_row=2, values_only=True)}
+ok(deps <= {"الإجازات"} and "حسب القسم" not in wb3.sheetnames, "staff report: own section only (%s)" % deps)
+ok(A.app.test_client().get("/admin/reports.xlsx").status_code == 302, "reports need login")
 print("ALL OK")

@@ -4,3 +4,4 @@ Werkzeug==3.1.9
 Jinja2==3.1.6
 Pillow==12.1.1
 pillow-heif==1.2.0
+openpyxl==3.1.5

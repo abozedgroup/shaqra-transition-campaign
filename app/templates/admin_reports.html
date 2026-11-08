@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}تقارير Excel{% endblock %}
+{% block body %}
+<section class="s adm st-page rp-page"><div class="wrap wide">
+  {% set anav='reports' %}{% include "_adminnav.html" %}
+  <header class="tl-head">
+    <h1>تقارير Excel{% if not me_admin %} – {{ my_dept.name_ar if my_dept else '' }}{% endif %}</h1>
+    <a class="btn" href="/admin/stats?from={{ s.f.from }}&to={{ s.f.to }}&dept={{ s.f.dept }}&channel={{ s.f.channel }}">← المؤشرات</a>
+  </header>
+
+  <div class="next-step" role="note"><b>كيف تعمل:</b> اختر الفترة وما يحتويه الملف، ثم «تنزيل». ستحصل على ملف Excel واحد، كل جزء في ورقة مستقلة، بالعربية من اليمين لليسار، مع تصفية جاهزة في رأس كل جدول.{% if not me_admin %} التقارير تشمل تذاكر قسمك فقط.{% endif %}</div>
+
+  {# ---------- ready-made reports ---------- #}
+  <h2 class="h2s">تقارير جاهزة</h2>
+  <div class="rp-quick">
+    {% set full = '&summary=1&tickets=1&ratings=1&appts=1' %}
+    {% for label, a, b in presets if label in ('الشهر الماضي', 'هذا الشهر', 'آخر 7 أيام') %}
+    <a class="rp-card" href="/admin/reports.xlsx?from={{ a }}&to={{ b }}&dept={{ s.f.dept }}{{ full }}">
+      <b>تقرير {{ label }}</b><span>{{ a }} – {{ b }}</span><small>الملخص والتفصيل، التذاكر، التقييمات، المواعيد</small><em>⬇ تنزيل</em></a>
+    {% endfor %}
+    <a class="rp-card" href="/admin/reports.xlsx?open=1&dept={{ s.f.dept }}&tickets=1&appts=1">
+      <b>التذاكر المفتوحة الآن</b><span>كل ما لم يُغلق بعد، مهما كان تاريخه</span><small>لمتابعة العمل المتبقي والمتأخر</small><em>⬇ تنزيل</em></a>
+  </div>
+
+  {# ---------- custom report ---------- #}
+  <h2 class="h2s">تقرير مخصص</h2>
+  <form class="card rp-form" method="get" action="/admin/reports.xlsx">
+    <fieldset>
+      <legend>١. الفترة <span class="opt">(حسب تاريخ تقديم التذكرة)</span></legend>
+      <nav class="presets" aria-label="فترات جاهزة">{% for label, a, b in presets %}<a href="/admin/reports?from={{ a }}&to={{ b }}&dept={{ s.f.dept }}&channel={{ s.f.channel }}" {% if s.f.from==a|string and s.f.to==b|string %}class="cur" aria-current="true"{% endif %}>{{ label }}</a>{% endfor %}</nav>
+      <div class="st-custom">
+        <label>من <input type="date" name="from" value="{{ s.f.from }}" required></label>
+        <label>إلى <input type="date" name="to" value="{{ s.f.to }}" required></label>
+      </div>
+    </fieldset>
+    <fieldset>
+      <legend>٢. النطاق</legend>
+      <div class="st-custom">
+        {% if me_admin %}<label>القسم <select name="dept"><option value="">كل الأقسام</option>{% for d in s.depts %}<option value="{{ d.id }}" {% if s.f.dept==d.id|string %}selected{% endif %}>{{ d.name_ar }}</option>{% endfor %}</select></label>{% endif %}
+        <label>القناة <select name="channel"><option value="">كل القنوات</option>{% for k,l in s.channels.items() %}<option value="{{k}}" {% if s.f.channel==k %}selected{% endif %}>{{l}}</option>{% endfor %}</select></label>
+      </div>
+    </fieldset>
+    <fieldset>
+      <legend>٣. محتوى الملف</legend>
+      <div class="rp-sheets">
+        {% for key, desc in sheets %}<label class="chk"><input type="checkbox" name="{{ key }}" value="1" {% if key in ('summary','tickets') %}checked{% endif %}> <span><b>{{ {'summary':'الملخص والتفصيل','tickets':'التذاكر','ratings':'التقييمات','appts':'المواعيد','events':'سجل الإجراءات'}[key] }}</b><small>{{ desc }}</small></span></label>{% endfor %}
+      </div>
+    </fieldset>
+    <p class="hint">المجموع لهذه الفترة: <b>{{ s.total.n }}</b> تذكرة · {{ s.total.nrat }} تقييمًا · {{ s.appt.booked + s.appt.walkins }} موعدًا وحضورًا.</p>
+    <button class="btn solid big" type="submit">⬇ تنزيل ملف Excel</button>
+  </form>
+  <p class="hint mt18">الملف يحتوي بيانات شخصية للموظفين (الأسماء والجوالات). احفظه في مكان آمن ولا ترسله خارج الإدارة. التذاكر المقدَّمة دون إفصاح تظهر دون أي بيانات شخصية وبتاريخ دون وقت.</p>
+</div></section>
+{% endblock %}

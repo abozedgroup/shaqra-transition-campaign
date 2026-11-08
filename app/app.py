@@ -1835,6 +1835,15 @@ def _dur(h):
 app.jinja_env.filters["dur"] = _dur
 
 
+def days_ar(n):
+    """Arabic number agreement: 1 يوم، 2 يومان، 3–10 أيام، 11+ يومًا."""
+    n = int(n)
+    return "يوم واحد" if n == 1 else "يومان" if n == 2 else "%d أيام" % n if 3 <= n <= 10 else "%d يومًا" % n
+
+
+app.jinja_env.filters["days_ar"] = days_ar
+
+
 def compute_stats(u, args):
     today = datetime.now(RIYADH).date()
     d_to = _parse_day(args.get("to"), today)
@@ -2061,5 +2070,6 @@ def static_site(p):
 
 
 import appointments  # noqa: E402,F401  (registers its routes and hooks; needs everything above)
+import reports  # noqa: E402,F401  (Excel reports)
 
 init_db()
